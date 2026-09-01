@@ -25,6 +25,15 @@ Install this file at the repository root as `AGENTS.md`. It contains stable repo
 - For code-first discovery, show the proposed spec diff and record temporary divergence in WAL. Apply a semantic spec change only within explicit edit scope and authority.
 - A read-only audit changes neither project files nor WAL.
 
+## Python Environment
+
+- Use `uv` as the only Python project, dependency, and virtual-environment manager.
+- Use the repository-local `.venv`; do not commit it or depend on absolute paths inside it.
+- Run Python and project tools through `uv run`; synchronize the environment through `uv sync`.
+- Treat `pyproject.toml` and `uv.lock` as the canonical dependency state. Update the lockfile through `uv` and include it with dependency changes.
+- Do not introduce `pip`, Poetry, Conda, `requirements.txt`, or another environment/package-management workflow unless explicitly authorized.
+- Do not edit generated files inside `.venv` manually.
+
 ## Handoff and Git
 
 After state-changing work, update only `ACTIVE_WAL` according to its protocol. Report `Specs / Code / Tests / Risks & REVIEW / Next`; include every verification command and result.
