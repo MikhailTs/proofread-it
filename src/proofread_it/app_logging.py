@@ -10,6 +10,7 @@ def log_invocation(
     *,
     profile: str,
     action: str,
+    source_text: str,
     source_process_name: str | None,
     source_window_title: str | None,
 ) -> None:
@@ -19,6 +20,7 @@ def log_invocation(
         "event": "invocation_received",
         "profile": profile,
         "action": action,
+        "source_text": source_text,
         "source": {
             "process_name": source_process_name,
             "window_title": source_window_title,

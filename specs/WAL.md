@@ -1,45 +1,48 @@
-Updated: 2026-09-02T15:49:29Z
+Updated: 2026-09-02T17:21:00Z
 
 - WAL-Schema: `1`
-- Checkpoint-ID: `e47e6ba6-d56e-4b2d-a5d3-2dcf69165b44`
-- Task: Implement the first observable MVP slice: invoke the Python application from AutoHotkey and log each invocation.
-- Active scope: Commit the completed AutoHotkey-to-Python invocation logging slice, its configuration, tests, documentation, and ACTIVE_WAL. No clipboard capture, API access, result presentation, credential loading, packaging, or push.
-- Authority: Explicit Project owner implementation request and explicit commit request in the current conversation on 2026-09-02.
-- Authoritative spec: `spec://proofreader/DESKTOP-ASSISTANT#architecture`, `spec://proofreader/DESKTOP-ASSISTANT#configuration`, `spec://proofreader/DESKTOP-ASSISTANT#interaction`, `spec://proofreader/DESKTOP-ASSISTANT#logging`, and `spec://proofreader/DESKTOP-ASSISTANT#testability`; approved file SHA-256 `633f60309a8abc066e7fedd37908b167bb262e24cf673ae3184eab15fc4a3e86`.
+- Checkpoint-ID: `da114d2d-92d0-4304-bbb4-97130a2360f0`
+- Task: Add the next MVP slice: capture selected text through the Windows clipboard and deliver it to the Python backend log.
+- Active scope: Commit the completed and manually accepted selected-text capture slice, its backend logging boundary, tests, documentation, and pre-commit ACTIVE_WAL. No exclusions, configurable clipboard policy, API access, result presentation, concurrency enforcement, credential loading, packaging, unrelated changes, or push.
+- Authority: Explicit Project owner implementation request, manual acceptance, and explicit commit request in the current conversation on 2026-09-02.
+- Authoritative spec: `spec://proofreader/DESKTOP-ASSISTANT#architecture`, `spec://proofreader/DESKTOP-ASSISTANT#clipboard`, `spec://proofreader/DESKTOP-ASSISTANT#logging`, and `spec://proofreader/DESKTOP-ASSISTANT#testability`; approved file SHA-256 `633f60309a8abc066e7fedd37908b167bb262e24cf673ae3184eab15fc4a3e86`.
 - Issue: `NONE`
 - Assignment: `NONE`
 - Phase: `IN_PROGRESS`
 
 ## Constraints
 
-- Keep the AutoHotkey layer thin and the Python backend responsible for configuration and logging -> `spec://proofreader/DESKTOP-ASSISTANT#architecture`.
-- Use the initial `Ctrl+Alt+E` / `Ctrl+Alt+Shift+E` action routes and record profile/action explicitly -> `spec://proofreader/DESKTOP-ASSISTANT#interaction`.
-- Write one configured local log and never inspect or log credentials, authorization material, or unrelated environment variables -> `spec://proofreader/DESKTOP-ASSISTANT#logging` and `spec://proofreader/DESKTOP-ASSISTANT#api-access`.
+- Keep capture in the thin AutoHotkey layer and pass only captured text to Python -> `spec://proofreader/DESKTOP-ASSISTANT#architecture` and `spec://proofreader/DESKTOP-ASSISTANT#clipboard`.
+- Never reuse stale clipboard text: clear it before copy, wait only a bounded time, and invoke the backend only for non-empty text -> `spec://proofreader/DESKTOP-ASSISTANT#clipboard`.
+- Restore the prior clipboard, including non-text formats where AutoHotkey supports them, and avoid placing source text on the process command line -> `spec://proofreader/DESKTOP-ASSISTANT#clipboard` and smallest privacy-preserving implementation choice.
+- The MVP log intentionally records selected source text but never credentials or unrelated environment values -> `spec://proofreader/DESKTOP-ASSISTANT#logging`.
 - Keep default tests offline and credential-free; use `uv` and the repository-local `.venv` -> `spec://proofreader/DESKTOP-ASSISTANT#testability` and `AGENTS.md`.
 - Preserve unrelated changes and do not commit or push without a separate explicit request -> `AGENTS.md`.
 
 ## Checkpoint and evidence basis
 
-- Repository/worktree/branch: `%USERPROFILE%/workspace/proofread-it`; `main`; HEAD `e41446c994ca30b716b9b0cf54434c5e371325f9`; observed `origin/main` is the same revision.
-- Staged tracked state excluding ACTIVE_WAL: clean. Unstaged tracked state excluding ACTIVE_WAL: `automation/windows/proofread-it.ahk`, `config/settings.json`, `docs/development.md`, `docs/windows-acceptance.md`, `src/proofread_it/__main__.py`, `src/proofread_it/app_logging.py`, `src/proofread_it/cli.py`, `src/proofread_it/config/loader.py`, `src/proofread_it/config/schemas.py`, `tests/component/test_cli_contract.py`, `tests/integration/test_logging.py`, `tests/unit/test_config.py`, and `tests/windows/test_hotkeys.py`. Non-ignored untracked state: clean. Ignored generated state: `logs/proofread-it.jsonl` contains a synthetic CLI smoke event.
-- ACTIVE_WAL pre-replacement SHA-256: `ba2d23bb5737210fb0acf0efa1e8b28b00adbd47a54c0fbbba828d5530a79970`; code/docs/test diff fingerprint excluding ACTIVE_WAL via `git diff -- . ':!specs/WAL.md' | git hash-object --stdin`: `d888a63e4b6f317f61fc84726dd1dc76584aaecb`.
+- Repository/worktree/branch: `%USERPROFILE%/workspace/proofread-it`; `main`; HEAD `5d68ebe8e79f129681d8c233bde4988b0917e007`; observed `origin/main` `e41446c994ca30b716b9b0cf54434c5e371325f9`.
+- Staged tracked state excluding ACTIVE_WAL: clean. Unstaged tracked state excluding ACTIVE_WAL: `automation/windows/proofread-it.ahk`, `docs/development.md`, `docs/windows-acceptance.md`, `src/proofread_it/app_logging.py`, `src/proofread_it/cli.py`, `tests/component/test_cli_contract.py`, `tests/integration/test_logging.py`, and `tests/windows/test_clipboard.py`. Non-ignored untracked state: clean. Ignored generated state: `logs/proofread-it.jsonl` contains prior local events plus the successful Unicode CLI smoke event.
+- ACTIVE_WAL pre-replacement SHA-256: `14de6ab5a1d9dabc17a2d566ba4734f91cfb25f5478545745285dd03065cca26`; code/docs/test diff fingerprint excluding ACTIVE_WAL via `git diff -- . ':!specs/WAL.md' | git hash-object --stdin`: `0bc154e905d17c76ef3eae588e045cc0c8f56013`.
 - Relevant approved specification SHA-256: `633f60309a8abc066e7fedd37908b167bb262e24cf673ae3184eab15fc4a3e86`.
 
 ## Boundaries
 
-- Implemented: AutoHotkey v2 binds both initial hotkeys, observes the active process/window, passes those values through its child environment, and launches the Python entry point with explicit profile/action; Python validates the implemented settings subset and appends one UTF-8 JSON Lines event to the configured log.
-- Verified at 2026-09-02T15:49:29Z on the recorded dirty-state fingerprint: `uv run --no-sync pytest -q` passed `6 passed in 0.24s`; `uv run --no-sync ruff check .` reported `All checks passed!`; `uv run --no-sync mypy src` reported success for 24 source files; `git diff --check` exited 0 with only line-ending notices.
-- Verified: a real `uv run --no-sync proofread-it --settings config/settings.json --profile proofread --action show_full` smoke invocation exited 0 and appended the expected synthetic event to `logs/proofread-it.jsonl`; a hidden AutoHotkey 2.0.26 process loaded the script for two seconds without a syntax/startup failure and was then stopped by PID.
-- Verified: automated sentinel coverage proves an unrelated `OPENAI_API_KEY` value is not logged. The external credential file was not accessed and no real credential-bearing environment variable was inspected.
-- Outstanding: human Windows acceptance by pressing both registered global hotkeys while the script is running; no automated keystrokes were sent to the user's active application.
-- Future follow-up requested by the Project owner: verify that the AHK entry point also works correctly when included with `#Include` from another script. Coverage must exercise path resolution from the included file, directive and global-name compatibility with the host script, auto-execute behavior, hotkey registration, and successful backend logging from the included form.
+- Implemented: each hotkey snapshots all feasible clipboard formats with `ClipboardAll`, clears stale data, sends standard copy, waits up to one second for text, restores the snapshot in `finally`, rejects empty/late capture visibly, and otherwise supplies the selected text to the backend through a child-only environment snapshot rather than the command line. Python logs the selected text in the existing invocation event.
+- Verified at 2026-09-02T16:53:22Z on diff fingerprint `0bc154e905d17c76ef3eae588e045cc0c8f56013`: `uv run --no-sync pytest -q` passed `8 passed in 0.40s`; `uv run --no-sync ruff check .` reported `All checks passed!`; `uv run --no-sync mypy src` reported success for 24 source files; `git diff --check` exited 0 with only line-ending notices.
+- Verified: an escalated local `uv run --no-sync proofread-it --settings config/settings.json --profile proofread --action show_full` smoke invocation exited 0; UTF-8 JSON parsing confirmed exact equality for multiline `First line.\nВторая строка.`, process `smoke.exe`, and title `Smoke — окно`. No API credential or external secret file was read.
+- Verified: AutoHotkey 2.0.26 loaded a unique temporary copy of the updated script for two seconds with `/ErrorStdOut`; it stayed running without a syntax/startup failure, then only that recorded PID was stopped and the temporary files were removed. The user's existing AutoHotkey process was not replaced or stopped.
+- Verified by Project-owner report in the current conversation on 2026-09-02: the documented manual Windows check passed. This accepts real selected-text capture, exact backend logging, prior-clipboard restoration, both hotkey routes, and the no-selection error/no-log behavior for this slice.
+- Outstanding: `NONE` within the authorized slice.
+- Risk: source text currently crosses the Windows child-process boundary through an environment variable, so very large selections remain bounded by the Windows process environment size; no product selection-size policy exists yet.
+- Future follow-up retained: verify `#Include` compatibility for path resolution, directives/global names, auto-execute behavior, hotkey registration, and backend logging.
 
 ## Next action
 
-- Action: Create the explicitly requested commit from the fourteen expected tracked files.
-- First command: stage only the expected implementation, configuration, test, documentation, and ACTIVE_WAL paths.
-- Completion criterion: one commit named `feat(windows): log AutoHotkey invocations` contains exactly the expected files and full `spec://` references; ignored local logs remain uncommitted and no push occurs.
+- Action: Create the explicitly requested commit from the nine expected tracked files.
+- First command: stage only `automation/windows/proofread-it.ahk`, `docs/development.md`, `docs/windows-acceptance.md`, `specs/WAL.md`, `src/proofread_it/app_logging.py`, `src/proofread_it/cli.py`, `tests/component/test_cli_contract.py`, `tests/integration/test_logging.py`, and `tests/windows/test_clipboard.py`.
+- Completion criterion: one commit named `feat(windows): capture selected text` contains exactly the expected files and full `spec://` references; ignored local logs remain uncommitted and no push occurs.
 
 - Blockers: `NONE`
 - Pending decisions: `NONE`
-- Temporary code/spec divergence: This first slice intentionally does not yet load hotkeys from `settings.json`, capture clipboard text, enforce exclusions/concurrency, call the API, or present results. Exit condition: later authorized MVP slices implement those approved anchors and replace static-source AHK checks with documented Windows acceptance where applicable.
+- Temporary code/spec divergence: This slice intentionally leaves exclusions-before-capture, configurable hotkeys/clipboard policy, API access, result presentation, and concurrency for later authorized slices. Exit condition: later slices implement the remaining approved anchors. The Windows environment-size bound for selected-text transfer needs an explicit policy or a different transport before arbitrary-size capture can be claimed.

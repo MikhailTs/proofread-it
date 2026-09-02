@@ -8,7 +8,7 @@ from pytest import MonkeyPatch
 from proofread_it.cli import main
 
 
-def test_cli_logs_only_the_invocation_contract(
+def test_cli_logs_captured_text_and_invocation_context(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
 ) -> None:
@@ -21,6 +21,7 @@ def test_cli_logs_only_the_invocation_contract(
 
     monkeypatch.setenv("PROOFREAD_IT_SOURCE_PROCESS_NAME", "firefox.exe")
     monkeypatch.setenv("PROOFREAD_IT_SOURCE_WINDOW_TITLE", "Draft — Mozilla Firefox")
+    monkeypatch.setenv("PROOFREAD_IT_SOURCE_TEXT", "First line.\nВторая строка.")
     monkeypatch.setenv("OPENAI_API_KEY", "must-not-appear")
 
     result = main(
@@ -40,6 +41,7 @@ def test_cli_logs_only_the_invocation_contract(
     assert event["event"] == "invocation_received"
     assert event["profile"] == "proofread"
     assert event["action"] == "show_full"
+    assert event["source_text"] == "First line.\nВторая строка."
     assert event["source"] == {
         "process_name": "firefox.exe",
         "window_title": "Draft — Mozilla Firefox",

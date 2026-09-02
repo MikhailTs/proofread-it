@@ -9,6 +9,7 @@ from proofread_it.app_logging import log_invocation
 from proofread_it.config.loader import load_settings
 
 _SOURCE_PROCESS_NAME = "PROOFREAD_IT_SOURCE_PROCESS_NAME"
+_SOURCE_TEXT = "PROOFREAD_IT_SOURCE_TEXT"
 _SOURCE_WINDOW_TITLE = "PROOFREAD_IT_SOURCE_WINDOW_TITLE"
 
 
@@ -29,6 +30,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         settings.logging.path,
         profile=options.profile,
         action=options.action,
+        source_text=os.environ.get(_SOURCE_TEXT, ""),
         source_process_name=os.environ.get(_SOURCE_PROCESS_NAME) or None,
         source_window_title=os.environ.get(_SOURCE_WINDOW_TITLE) or None,
     )

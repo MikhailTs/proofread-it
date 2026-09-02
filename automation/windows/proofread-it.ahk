@@ -13,9 +13,16 @@ Invoke(profile, action) {
     activeWindow := WinExist("A")
     processName := activeWindow ? WinGetProcessName("ahk_id " activeWindow) : ""
     windowTitle := activeWindow ? WinGetTitle("ahk_id " activeWindow) : ""
+    selectedText := CaptureSelectedText()
+
+    if (selectedText = "") {
+        MsgBox("No selected text was detected.", "Proofread It", "Icon!")
+        return
+    }
 
     EnvSet("PROOFREAD_IT_SOURCE_PROCESS_NAME", processName)
     EnvSet("PROOFREAD_IT_SOURCE_WINDOW_TITLE", windowTitle)
+    EnvSet("PROOFREAD_IT_SOURCE_TEXT", selectedText)
 
     command := Format(
         'uv run --project "{1}" proofread-it --settings "{2}" --profile "{3}" --action "{4}"',
@@ -24,5 +31,23 @@ Invoke(profile, action) {
         profile,
         action
     )
-    Run(command, ProjectRoot, "Hide")
+    try {
+        Run(command, ProjectRoot, "Hide")
+    } finally {
+        EnvSet("PROOFREAD_IT_SOURCE_TEXT", "")
+    }
+}
+
+CaptureSelectedText() {
+    clipboardBackup := ClipboardAll()
+    try {
+        A_Clipboard := ""
+        Send("^c")
+        if !ClipWait(1.0) {
+            return ""
+        }
+        return A_Clipboard
+    } finally {
+        A_Clipboard := clipboardBackup
+    }
 }

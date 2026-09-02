@@ -17,11 +17,13 @@ and exposes the initial development bindings:
 - `Ctrl+Alt+E` records a `proofread` / `show_full` invocation.
 - `Ctrl+Alt+Shift+E` records a `proofread` / `copy_final` invocation.
 
-Each hotkey starts the Python backend through `uv`, records the active process name and window
-title, appends one JSON event to `logs/proofread-it.jsonl`, and exits. This first slice does not
-capture selected text, call the API, or display a result.
+Each hotkey preserves the current clipboard, copies the selected text with the active application's
+standard copy command, restores the clipboard, and passes non-empty text to the Python backend.
+The backend records the text together with the active process name and window title in one JSON
+event in `logs/proofread-it.jsonl`, then exits. No API call or result display exists yet. If copying
+does not produce text within one second, the backend is not started and a concise error is shown.
 
-The log can contain sensitive window titles now and will contain selected text and model data in
+The log contains sensitive selected text and window titles now and will also contain model data in
 later MVP slices. Keep it private and delete it according to your needs. The `logs/` directory is
 ignored by Git.
 
