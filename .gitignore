@@ -216,3 +216,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project-local generated and secret-bearing files
+.env.*
+logs/
+.DS_Store
+Thumbs.db
+!automation/windows/lib/
+!automation/windows/lib/README.md

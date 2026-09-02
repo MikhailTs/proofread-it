@@ -1,0 +1,1 @@
+"""Source-context normalization placeholder."""

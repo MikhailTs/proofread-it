@@ -1,0 +1,1 @@
+"""Windows hotkey-test placeholder."""

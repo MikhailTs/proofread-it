@@ -1,0 +1,1 @@
+"""Model-response package scaffold."""

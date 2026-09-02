@@ -1,0 +1,1 @@
+"""Proofread It package scaffold."""
