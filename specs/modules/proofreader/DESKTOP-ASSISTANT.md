@@ -5,7 +5,7 @@
 - Approval authority: `Project owner`
 - Supersedes: `NONE`
 - Superseded by: `NONE`
-- Updated: `2026-09-01`
+- Updated: `2026-09-02`
 
 ## Contract Summary {#summary}
 
@@ -116,19 +116,23 @@ Operational settings MUST NOT contain proofreading-specific language rules. Prof
 
 ## API access and credentials {#api-access}
 
-**Normative:** The backend MUST access the LLM through a small provider-facing API abstraction. `settings.json` MUST select the model, environment-variable name, request timeout, output-token limit when used, and retry count. For the MVP, the API key MUST be read from the named environment variable; `OPENAI_API_KEY` is the default example. The key and authorization material MUST NOT be stored in `settings.json`, included in the logical request, or written to logs.
+**Normative:** The backend MUST access the LLM through a small provider-facing API abstraction. `settings.json` MUST select the model, environment-variable name, request timeout, output-token limit when used, and retry count. For the MVP, the backend MUST read the API key from the named environment variable; `OPENAI_API_KEY` is the default example.
+
+During local MVP development, the sole secret source for application runs and explicitly selected live API tests MUST be `$env:USERPROFILE\.secrets\openai_token.txt`. A development launcher or live-test wrapper MUST read the file only when invoked and MUST inject its value into the named environment variable only for the launched application or test process tree. This includes starting the AutoHotkey entry point and allowing its backend child process to inherit the variable. It MUST NOT persist the key in the Windows User or Machine environment or pass the key on a command line. A missing, unreadable, or empty secret file MUST fail before any API request is attempted.
+
+The key and authorization material MUST NOT be stored in repository files or `settings.json`, included in the logical request, exposed in process arguments, or written to logs. The external development secret file MUST NOT be committed and SHOULD be readable only by the current Windows user.
 
 The core workflow MUST use a public LLM API and MUST NOT drive the ChatGPT web UI or reproduce private browser requests.
 
-**Rationale:** Isolating the provider SDK and keeping credentials out of files and logs reduces coupling and accidental secret disclosure.
+**Rationale:** Isolating the provider SDK reduces coupling. Loading the development key immediately before launch limits ambient exposure while preserving the environment-variable contract expected by API clients. The external plaintext file is an accepted temporary local-development tradeoff until an OS-native secret store replaces it.
 
-**Verification:** API-client unit tests use a fake provider; configuration and log tests scan outputs for a sentinel API key and authorization header and find neither.
+**Verification:** API-client unit tests use a fake provider. Launcher and live-test-wrapper tests use a temporary sentinel file and demonstrate process-local injection, failure before an API call for a missing, unreadable, or empty file, and absence of persistent User or Machine environment changes. Configuration, process-argument, and log tests scan outputs for the sentinel API key and authorization header and find neither. Verification MUST NOT read the real development secret file.
 
-**Alternatives:** Direct SDK calls throughout the application, plaintext keys in configuration, ChatGPT DOM automation, and Windows Credential Manager are rejected for the MVP; an OS-native secret store remains a future option.
+**Alternatives:** Direct SDK calls throughout the application, keys in project configuration, persistent User or Machine environment variables, command-line key arguments, and ChatGPT DOM automation are rejected. Windows Credential Manager is deferred during the MVP but is the required first post-MVP improvement.
 
-**Reconsider when:** The application requires multiple providers, organization-managed credentials, or an approved OS-native secret store.
+**Reconsider when:** MVP development ends, the application is distributed beyond the current local development setup, or organization-managed credentials are required. The first post-MVP reconsideration MUST replace the file source with Windows Credential Manager while preserving process-local delivery to the backend.
 
-**Traceability:** `spec://proofreader/DESKTOP-ASSISTANT#configuration`; source proposal `SPEC-007`, `SPEC-008`, `SPEC-050`, and `SPEC-055`; code and tests `UNKNOWN`.
+**Traceability:** `spec://proofreader/DESKTOP-ASSISTANT#configuration`, `docs/development.md`; source proposal `SPEC-007`, `SPEC-008`, `SPEC-050`, and `SPEC-055`; Project owner decision on 2026-09-02; launcher, backend, and live-test implementation `UNKNOWN`.
 
 ## Proofreading profile contract {#proofreading-profile}
 
@@ -317,37 +321,39 @@ Future application-specific collectors MUST remain optional and MUST be introduc
 
 ## Testability boundaries {#testability}
 
-**Normative:** Context normalization, request construction, API access, and response normalization MUST each be independently testable. Unit tests MUST NOT require AutoHotkey, the Windows clipboard, or live network access to cover those components. The API abstraction MUST support a fake implementation, and UI/clipboard consumers MUST receive normalized results rather than parse raw provider responses.
+**Normative:** Context normalization, request construction, API access, and response normalization MUST each be independently testable. Unit tests MUST NOT require AutoHotkey, the Windows clipboard, live network access, or a real API credential to cover those components. The default test run MUST NOT read `$env:USERPROFILE\.secrets\openai_token.txt`. The API abstraction MUST support a fake implementation, and UI/clipboard consumers MUST receive normalized results rather than parse raw provider responses.
+
+Live API tests, when introduced, MUST be separately marked, excluded from the default test run, and selected explicitly. They MUST receive the credential only through the process-local mechanism defined by `spec://proofreader/DESKTOP-ASSISTANT#api-access`.
 
 Windows integration coverage MUST separately exercise active-window observation, clipboard capture/restoration, hotkey routing, and single-request concurrency.
 
 **Rationale:** Pure core components provide fast deterministic evidence while narrow Windows integration tests cover the platform boundary.
 
-**Verification:** The project test runner can execute core unit tests offline; component tests demonstrate fake API injection and normalized result consumption; Windows acceptance commands are documented and reproducible.
+**Verification:** The project test runner can execute core unit tests offline with the development secret file absent; component tests demonstrate fake API injection and normalized result consumption; the default run excludes live API tests; Windows acceptance commands are documented and reproducible. Live-test-wrapper tests use only a sentinel credential and do not expose it in output.
 
 **Alternatives:** End-to-end-only verification was rejected because it makes provider and clipboard failures hard to isolate.
 
 **Reconsider when:** The implementation language or packaging model changes while preserving equivalent isolation and evidence.
 
-**Traceability:** `spec://proofreader/DESKTOP-ASSISTANT#architecture`, `spec://proofreader/DESKTOP-ASSISTANT#request-construction`, `spec://proofreader/DESKTOP-ASSISTANT#structured-result`; source proposal `SPEC-052` through `SPEC-056`; code and tests `UNKNOWN`.
+**Traceability:** `spec://proofreader/DESKTOP-ASSISTANT#architecture`, `spec://proofreader/DESKTOP-ASSISTANT#api-access`, `spec://proofreader/DESKTOP-ASSISTANT#request-construction`, `spec://proofreader/DESKTOP-ASSISTANT#structured-result`, `docs/development.md`; source proposal `SPEC-052` through `SPEC-056`; Project owner decision on 2026-09-02; code and tests `UNKNOWN`.
 
 ## Explicit MVP scope {#mvp-scope}
 
-**Normative:** The MVP includes Windows desktop support; AutoHotkey v2 global hotkeys; selected-text capture; clipboard preservation; a Python backend; versioned `settings.json` and `profiles.json`; the `proofread` profile; application/process detection; active-window-title capture; configured exclusions; stateless public-API access; structured corrections plus final text; full-result display; final-text copy; one in-flight request; full single-file logging; and basic errors and bounded retries.
+**Normative:** The MVP includes Windows desktop support; AutoHotkey v2 global hotkeys; selected-text capture; clipboard preservation; a Python backend; versioned `settings.json` and `profiles.json`; the `proofread` profile; application/process detection; active-window-title capture; configured exclusions; stateless public-API access; development-time secret loading from `$env:USERPROFILE\.secrets\openai_token.txt` into a process-local environment variable; structured corrections plus final text; full-result display; final-text copy; one in-flight request; full single-file logging; and basic errors and bounded retries.
 
 The MVP explicitly excludes persistent conversations, chat UI, browser extensions, Discord and Telegram APIs, OCR, surrounding-message capture, sophisticated application-specific UI scraping, tray application, installer, cloud synchronization, direct replacement of selected text, Windows Credential Manager, automatic profile selection, manual context notes, local history, request queues, and multiple simultaneous requests.
 
-Items excluded from the MVP are candidates only; this document does not authorize or require their implementation.
+Windows Credential Manager integration MUST be the first post-MVP implementation task and MUST replace the development file as the secret source. All other items excluded from the MVP are candidates only; this document does not authorize or require their implementation.
 
 **Rationale:** The boundary contains the smallest end-to-end workflow that replaces manual web-chat proofreading while retaining inspectable results, privacy controls, and diagnostic evidence.
 
-**Verification:** Release checklist maps every included item to a passing test or recorded Windows manual acceptance and confirms excluded features are not required for operation.
+**Verification:** Release checklist maps every included item to a passing test or recorded Windows manual acceptance, confirms excluded features are not required for operation, and records Windows Credential Manager integration as the first post-MVP task.
 
-**Alternatives:** A richer initial GUI and application-specific integrations were rejected to keep the first implementation focused.
+**Alternatives:** A richer initial GUI, application-specific integrations, and Windows Credential Manager within the MVP were rejected to keep the first implementation focused.
 
-**Reconsider when:** MVP acceptance is complete and observed use identifies the next smallest valuable increment.
+**Reconsider when:** MVP acceptance is complete; Windows Credential Manager integration then takes precedence over other feature increments.
 
-**Traceability:** All decisions in this specification; source proposal `SPEC-057` through `SPEC-059`; code and tests `UNKNOWN`.
+**Traceability:** All decisions in this specification; `spec://proofreader/DESKTOP-ASSISTANT#api-access`; source proposal `SPEC-057` through `SPEC-059`; Project owner decision on 2026-09-02; code and tests `UNKNOWN`.
 
 ## Cross-Cutting Invariants {#invariants}
 
@@ -365,3 +371,5 @@ Items excluded from the MVP are candidates only; this document does not authoriz
   `NONE -> initial DRAFT proposal consolidated from specs/spec-draft.md and the user's clarifications`; reason: `establish one reviewable protocol-compliant product contract`; invalidates: `NONE (initial specification; implementation and tests are UNKNOWN)`; review: `NONE`.
 - 2026-09-01 — Project owner — `spec://proofreader/DESKTOP-ASSISTANT#summary`, `spec://proofreader/DESKTOP-ASSISTANT#constraints`, `spec://proofreader/DESKTOP-ASSISTANT#acceptance`, `spec://proofreader/DESKTOP-ASSISTANT#product-workflow`, `spec://proofreader/DESKTOP-ASSISTANT#stateless-lifecycle`, `spec://proofreader/DESKTOP-ASSISTANT#architecture`, `spec://proofreader/DESKTOP-ASSISTANT#configuration`, `spec://proofreader/DESKTOP-ASSISTANT#api-access`, `spec://proofreader/DESKTOP-ASSISTANT#proofreading-profile`, `spec://proofreader/DESKTOP-ASSISTANT#context-policy`, `spec://proofreader/DESKTOP-ASSISTANT#request-construction`, `spec://proofreader/DESKTOP-ASSISTANT#structured-result`, `spec://proofreader/DESKTOP-ASSISTANT#clipboard`, `spec://proofreader/DESKTOP-ASSISTANT#interaction`, `spec://proofreader/DESKTOP-ASSISTANT#concurrency`, `spec://proofreader/DESKTOP-ASSISTANT#errors`, `spec://proofreader/DESKTOP-ASSISTANT#logging`, `spec://proofreader/DESKTOP-ASSISTANT#integration-boundary`, `spec://proofreader/DESKTOP-ASSISTANT#testability`, `spec://proofreader/DESKTOP-ASSISTANT#mvp-scope`, `spec://proofreader/DESKTOP-ASSISTANT#invariants`:
   `DRAFT proposal -> APPROVED normative specification`; reason: `explicit approval by the declared Project owner in the current conversation`; invalidates: `pre-approval specification verification evidence; implementation and test conformance remain UNKNOWN`; review: `NONE`.
+- 2026-09-02 — Project owner — `spec://proofreader/DESKTOP-ASSISTANT#api-access`, `spec://proofreader/DESKTOP-ASSISTANT#testability`, `spec://proofreader/DESKTOP-ASSISTANT#mvp-scope`:
+  `named runtime environment variable with unspecified local secret source; Credential Manager only deferred -> fixed MVP-development file source with process-local injection; credential-free default tests and explicit live tests; Credential Manager required as the first post-MVP task`; reason: `limit ambient credential exposure on the local development machine without blocking MVP work`; invalidates: `previous semantic verification for the affected anchors; launcher, backend, and live-test implementation remain UNKNOWN`; review: `NONE`.
