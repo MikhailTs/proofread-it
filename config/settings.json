@@ -1,3 +1,6 @@
 {
-  "schema_version": 1
+  "schema_version": 1,
+  "logging": {
+    "path": "../logs/proofread-it.jsonl"
+  }
 }

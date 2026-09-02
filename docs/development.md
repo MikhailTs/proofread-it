@@ -9,7 +9,21 @@ uv run ruff check .
 uv run mypy src
 ```
 
-The current source and test modules are placeholders only.
+## Current invocation slice
+
+Install AutoHotkey v2, then run `automation/windows/proofread-it.ahk`. The script stays active
+and exposes the initial development bindings:
+
+- `Ctrl+Alt+E` records a `proofread` / `show_full` invocation.
+- `Ctrl+Alt+Shift+E` records a `proofread` / `copy_final` invocation.
+
+Each hotkey starts the Python backend through `uv`, records the active process name and window
+title, appends one JSON event to `logs/proofread-it.jsonl`, and exits. This first slice does not
+capture selected text, call the API, or display a result.
+
+The log can contain sensitive window titles now and will contain selected text and model data in
+later MVP slices. Keep it private and delete it according to your needs. The `logs/` directory is
+ignored by Git.
 
 ## Development API credential
 
