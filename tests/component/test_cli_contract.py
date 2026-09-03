@@ -23,6 +23,11 @@ def test_cli_logs_captured_text_and_invocation_context(
     monkeypatch.setenv("PROOFREAD_IT_SOURCE_WINDOW_TITLE", "Draft — Mozilla Firefox")
     monkeypatch.setenv("PROOFREAD_IT_SOURCE_TEXT", "First line.\nВторая строка.")
     monkeypatch.setenv("OPENAI_API_KEY", "must-not-appear")
+    shown_results: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        "proofread_it.cli.show_result",
+        lambda **result: shown_results.append(result),
+    )
 
     result = main(
         [
@@ -48,3 +53,42 @@ def test_cli_logs_captured_text_and_invocation_context(
     }
     assert event["timestamp"].endswith("+00:00")
     assert "must-not-appear" not in raw_log
+    assert shown_results == [
+        {
+            "explanations": (
+                "Proofreading is not connected yet. The original text is shown as the result.",
+            ),
+            "final_text": event["source_text"],
+        }
+    ]
+
+
+def test_copy_final_does_not_open_result_window(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    settings_path = tmp_path / "settings.json"
+    settings_path.write_text(
+        json.dumps({"schema_version": 1, "logging": {"path": "events.jsonl"}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PROOFREAD_IT_SOURCE_TEXT", "Original text")
+    shown_results: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        "proofread_it.cli.show_result",
+        lambda **result: shown_results.append(result),
+    )
+
+    result = main(
+        [
+            "--settings",
+            str(settings_path),
+            "--profile",
+            "proofread",
+            "--action",
+            "copy_final",
+        ]
+    )
+
+    assert result == 0
+    assert shown_results == []

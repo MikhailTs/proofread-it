@@ -14,14 +14,16 @@ uv run mypy src
 Install AutoHotkey v2, then run `automation/windows/proofread-it.ahk`. The script stays active
 and exposes the initial development bindings:
 
-- `Ctrl+Alt+E` records a `proofread` / `show_full` invocation.
+- `Ctrl+Alt+E` records a `proofread` / `show_full` invocation and opens the result window.
 - `Ctrl+Alt+Shift+E` records a `proofread` / `copy_final` invocation.
 
 Each hotkey preserves the current clipboard, copies the selected text with the active application's
 standard copy command, restores the clipboard, and passes non-empty text to the Python backend.
 The backend records the text together with the active process name and window title in one JSON
-event in `logs/proofread-it.jsonl`, then exits. No API call or result display exists yet. If copying
-does not produce text within one second, the backend is not started and a concise error is shown.
+event in `logs/proofread-it.jsonl`. For `show_full`, it then opens a minimal result window with a
+placeholder explanation and the original selected text as the temporary result. No API call is made
+yet, and `copy_final` does not change the clipboard in this slice. If copying does not produce text
+within one second, the backend is not started and a concise error is shown.
 
 The log contains sensitive selected text and window titles now and will also contain model data in
 later MVP slices. Keep it private and delete it according to your needs. The `logs/` directory is

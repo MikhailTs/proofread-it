@@ -1,1 +1,1 @@
-"""Result-presentation package scaffold."""
+"""Result-presentation boundaries."""

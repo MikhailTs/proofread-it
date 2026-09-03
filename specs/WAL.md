@@ -1,48 +1,47 @@
-Updated: 2026-09-02T17:21:00Z
+Updated: 2026-09-03T16:12:10Z
 
 - WAL-Schema: `1`
-- Checkpoint-ID: `da114d2d-92d0-4304-bbb4-97130a2360f0`
-- Task: Add the next MVP slice: capture selected text through the Windows clipboard and deliver it to the Python backend log.
-- Active scope: Commit the completed and manually accepted selected-text capture slice, its backend logging boundary, tests, documentation, and pre-commit ACTIVE_WAL. No exclusions, configurable clipboard policy, API access, result presentation, concurrency enforcement, credential loading, packaging, unrelated changes, or push.
-- Authority: Explicit Project owner implementation request, manual acceptance, and explicit commit request in the current conversation on 2026-09-02.
-- Authoritative spec: `spec://proofreader/DESKTOP-ASSISTANT#architecture`, `spec://proofreader/DESKTOP-ASSISTANT#clipboard`, `spec://proofreader/DESKTOP-ASSISTANT#logging`, and `spec://proofreader/DESKTOP-ASSISTANT#testability`; approved file SHA-256 `633f60309a8abc066e7fedd37908b167bb262e24cf673ae3184eab15fc4a3e86`.
+- Checkpoint-ID: `6416bc35-706f-42c2-b603-37091cd8decc`
+- Task: Add the next MVP slice: show a proofreading-result window using the captured source text and a placeholder explanation until provider access is implemented.
+- Active scope: Create the explicitly requested local commit containing the completed, verified, and manually accepted Python `show_full` presentation slice, focused tests, documentation, and pre-commit ACTIVE_WAL. No API access, response parsing integration, `copy_final` behavior, concurrency enforcement, configurable hotkeys, exclusions, packaging, unrelated changes, or push.
+- Authority: Explicit Project owner implementation request, manual acceptance, and explicit commit request in the current conversation on 2026-09-03.
+- Authoritative spec: `spec://proofreader/DESKTOP-ASSISTANT#architecture`, `spec://proofreader/DESKTOP-ASSISTANT#structured-result`, `spec://proofreader/DESKTOP-ASSISTANT#interaction`, and `spec://proofreader/DESKTOP-ASSISTANT#testability`; approved file SHA-256 `633f60309a8abc066e7fedd37908b167bb262e24cf673ae3184eab15fc4a3e86`.
 - Issue: `NONE`
 - Assignment: `NONE`
 - Phase: `IN_PROGRESS`
 
 ## Constraints
 
-- Keep capture in the thin AutoHotkey layer and pass only captured text to Python -> `spec://proofreader/DESKTOP-ASSISTANT#architecture` and `spec://proofreader/DESKTOP-ASSISTANT#clipboard`.
-- Never reuse stale clipboard text: clear it before copy, wait only a bounded time, and invoke the backend only for non-empty text -> `spec://proofreader/DESKTOP-ASSISTANT#clipboard`.
-- Restore the prior clipboard, including non-text formats where AutoHotkey supports them, and avoid placing source text on the process command line -> `spec://proofreader/DESKTOP-ASSISTANT#clipboard` and smallest privacy-preserving implementation choice.
-- The MVP log intentionally records selected source text but never credentials or unrelated environment values -> `spec://proofreader/DESKTOP-ASSISTANT#logging`.
-- Keep default tests offline and credential-free; use `uv` and the repository-local `.venv` -> `spec://proofreader/DESKTOP-ASSISTANT#testability` and `AGENTS.md`.
-- Preserve unrelated changes and do not commit or push without a separate explicit request -> `AGENTS.md`.
+- Keep result presentation in the Python presentation boundary and independent of the long-term UI technology -> `spec://proofreader/DESKTOP-ASSISTANT#architecture` and `spec://proofreader/DESKTOP-ASSISTANT#interaction`.
+- For `show_full`, expose explanatory corrections and the complete final text; this slice uses an explicit explanation placeholder and the captured source text as the temporary final text by Project-owner direction -> `spec://proofreader/DESKTOP-ASSISTANT#interaction` and current request.
+- Keep automated tests offline and avoid opening a real GUI in the default test run -> `spec://proofreader/DESKTOP-ASSISTANT#testability`.
+- Do not claim the source-text stub is a validated model result; replace it when API/response integration is authorized -> `spec://proofreader/DESKTOP-ASSISTANT#structured-result`.
+- Preserve unrelated changes and do not commit or push without separate explicit requests -> `AGENTS.md`.
 
 ## Checkpoint and evidence basis
 
-- Repository/worktree/branch: `%USERPROFILE%/workspace/proofread-it`; `main`; HEAD `5d68ebe8e79f129681d8c233bde4988b0917e007`; observed `origin/main` `e41446c994ca30b716b9b0cf54434c5e371325f9`.
-- Staged tracked state excluding ACTIVE_WAL: clean. Unstaged tracked state excluding ACTIVE_WAL: `automation/windows/proofread-it.ahk`, `docs/development.md`, `docs/windows-acceptance.md`, `src/proofread_it/app_logging.py`, `src/proofread_it/cli.py`, `tests/component/test_cli_contract.py`, `tests/integration/test_logging.py`, and `tests/windows/test_clipboard.py`. Non-ignored untracked state: clean. Ignored generated state: `logs/proofread-it.jsonl` contains prior local events plus the successful Unicode CLI smoke event.
-- ACTIVE_WAL pre-replacement SHA-256: `14de6ab5a1d9dabc17a2d566ba4734f91cfb25f5478545745285dd03065cca26`; code/docs/test diff fingerprint excluding ACTIVE_WAL via `git diff -- . ':!specs/WAL.md' | git hash-object --stdin`: `0bc154e905d17c76ef3eae588e045cc0c8f56013`.
+- Repository/worktree/branch: `%USERPROFILE%/workspace/proofread-it`; `main`; HEAD `01d067faca263cdc49652e188e2870ce041b778c`; observed `origin/main` `5d68ebe8e79f129681d8c233bde4988b0917e007`; local branch is ahead by one commit; no merge or rebase is active.
+- Staged tracked state excluding ACTIVE_WAL: `docs/development.md`, `docs/windows-acceptance.md`, `src/proofread_it/cli.py`, `src/proofread_it/presentation/__init__.py`, `src/proofread_it/presentation/result_window.py`, `tests/component/test_cli_contract.py`, and `tests/unit/test_result_window.py`. Unstaged tracked state excluding ACTIVE_WAL: clean. Non-ignored untracked state: clean. Ignored generated state: existing local log state is outside this slice.
+- Replaced prior-task ACTIVE_WAL SHA-256: `1de3c7b19ad2d9d163ae7b71d695ad338a0783ae6ab764c37c60a41f7fcf01b3`; canonical dirty-state fingerprint after this replacement: `UNAVAILABLE` because only ACTIVE_WAL is dirty.
 - Relevant approved specification SHA-256: `633f60309a8abc066e7fedd37908b167bb262e24cf673ae3184eab15fc4a3e86`.
 
 ## Boundaries
 
-- Implemented: each hotkey snapshots all feasible clipboard formats with `ClipboardAll`, clears stale data, sends standard copy, waits up to one second for text, restores the snapshot in `finally`, rejects empty/late capture visibly, and otherwise supplies the selected text to the backend through a child-only environment snapshot rather than the command line. Python logs the selected text in the existing invocation event.
-- Verified at 2026-09-02T16:53:22Z on diff fingerprint `0bc154e905d17c76ef3eae588e045cc0c8f56013`: `uv run --no-sync pytest -q` passed `8 passed in 0.40s`; `uv run --no-sync ruff check .` reported `All checks passed!`; `uv run --no-sync mypy src` reported success for 24 source files; `git diff --check` exited 0 with only line-ending notices.
-- Verified: an escalated local `uv run --no-sync proofread-it --settings config/settings.json --profile proofread --action show_full` smoke invocation exited 0; UTF-8 JSON parsing confirmed exact equality for multiline `First line.\nВторая строка.`, process `smoke.exe`, and title `Smoke — окно`. No API credential or external secret file was read.
-- Verified: AutoHotkey 2.0.26 loaded a unique temporary copy of the updated script for two seconds with `/ErrorStdOut`; it stayed running without a syntax/startup failure, then only that recorded PID was stopped and the temporary files were removed. The user's existing AutoHotkey process was not replaced or stopped.
-- Verified by Project-owner report in the current conversation on 2026-09-02: the documented manual Windows check passed. This accepts real selected-text capture, exact backend logging, prior-clipboard restoration, both hotkey routes, and the no-selection error/no-log behavior for this slice.
-- Outstanding: `NONE` within the authorized slice.
-- Risk: source text currently crosses the Windows child-process boundary through an environment variable, so very large selections remain bounded by the Windows process environment size; no product selection-size policy exists yet.
-- Future follow-up retained: verify `#Include` compatibility for path resolution, directives/global names, auto-execute behavior, hotkey registration, and backend logging.
+- Implemented: `show_full` now logs the invocation and opens a resizable Tkinter window with read-only `Explanation` and `Result` fields plus Close/Escape behavior; the temporary view contains an explicit placeholder explanation and the exact captured source text. `copy_final` remains unchanged and does not open the window.
+- Verified at 2026-09-03T15:49:35Z on the listed dirty checkout: `uv run --no-sync pytest -q` passed `10 passed in 0.46s`; `uv run --no-sync ruff check .` reported `All checks passed!`; `uv run --no-sync mypy src` reported success for 24 source files; `git diff --check` exited 0 with only line-ending notices.
+- Verified: `uv run --no-sync python -c <hidden Tk smoke>` reported `GUI smoke passed` after creating a real Tk 9.0 root, constructing the result-window widgets, entering the event loop, and closing automatically.
+- Verified: documentation describes the temporary behavior and extends the existing Windows acceptance flow with visual result-window checks.
+- Verified by Project-owner report in the current conversation on 2026-09-03: the real hotkey path opens the result window, the window resizes and closes correctly, and the clipboard retains its pre-hotkey contents.
+- Verified pre-commit at 2026-09-03T15:58:44Z on the revalidated listed dirty checkout: `uv run --no-sync pytest -q` passed `10 passed in 0.33s`; `uv run --no-sync ruff check .` reported `All checks passed!`; `uv run --no-sync mypy src` reported success for 24 source files; `git diff --check` exited 0 with only line-ending notices.
+- Outstanding: create and inspect the explicitly requested local commit.
+- Risk: the placeholder explanation and source-text result are deliberately temporary and must be replaced by a validated normalized model result during later provider/response integration.
 
 ## Next action
 
-- Action: Create the explicitly requested commit from the nine expected tracked files.
-- First command: stage only `automation/windows/proofread-it.ahk`, `docs/development.md`, `docs/windows-acceptance.md`, `specs/WAL.md`, `src/proofread_it/app_logging.py`, `src/proofread_it/cli.py`, `tests/component/test_cli_contract.py`, `tests/integration/test_logging.py`, and `tests/windows/test_clipboard.py`.
-- Completion criterion: one commit named `feat(windows): capture selected text` contains exactly the expected files and full `spec://` references; ignored local logs remain uncommitted and no push occurs.
+- Action: Refresh staged ACTIVE_WAL, inspect the final staged file list, and create the requested local commit.
+- First command: stage only `specs/WAL.md`, then run `git diff --cached --name-status` and `git diff --cached --check`.
+- Completion criterion: one commit named `feat(ui): show proofreading result` contains exactly the accepted slice and full relevant `spec://` references; no push occurs.
 
 - Blockers: `NONE`
 - Pending decisions: `NONE`
-- Temporary code/spec divergence: This slice intentionally leaves exclusions-before-capture, configurable hotkeys/clipboard policy, API access, result presentation, and concurrency for later authorized slices. Exit condition: later slices implement the remaining approved anchors. The Windows environment-size bound for selected-text transfer needs an explicit policy or a different transport before arbitrary-size capture can be claimed.
+- Temporary code/spec divergence: By explicit Project-owner direction, this slice passes captured source text directly to presentation as temporary `final_text` and uses a placeholder explanation before provider/response integration exists. This is not a normalized model result and therefore does not satisfy `spec://proofreader/DESKTOP-ASSISTANT#structured-result`; owner: Project owner; exit condition: a later authorized API/response slice supplies a validated normalized result to the same presentation boundary.
