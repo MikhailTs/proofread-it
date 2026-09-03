@@ -5,7 +5,7 @@
 - Approval authority: `Project owner`
 - Supersedes: `NONE`
 - Superseded by: `NONE`
-- Updated: `2026-09-02`
+- Updated: `2026-09-03`
 
 ## Contract Summary {#summary}
 
@@ -100,19 +100,19 @@ Windows automation, context collection, profile selection, request construction,
 **Normative:** The MVP MUST load two distinct, human-editable JSON files:
 
 - `settings.json` defines operational behavior: schema version, API model and credential source, timeouts and retries, default profile, hotkey routing, clipboard policy, UI policy, context allow/exclusion policy, concurrency behavior, logging behavior, and relevant paths.
-- `profiles.json` defines model-processing behavior: schema version, task identifier, editable instructions, editing policy, output policy, tone/register guidance, and the subset of globally permitted context fields used by each profile.
+- `profiles.json` defines model-processing behavior: schema version, task identifier, editable instructions, editing policy, output policy, tone/register guidance, and the subset of globally permitted context fields used by each profile. In schema version `1`, `profiles` MUST be an object keyed by profile name, and each profile MUST contain exactly `task`, `instructions`, and `context_fields`. `task` and `instructions` MUST be non-empty strings. `instructions` MUST contain the complete stable model prompt; editing, output, and tone/register policy MUST be expressed there instead of duplicated as independent control fields. `context_fields` MUST be an array of unique names drawn only from `application_name`, `process_name`, and `window_title`.
 
 Operational settings MUST NOT contain proofreading-specific language rules. Profiles MUST NOT contain capture, credential, concurrency, file-path, or logging mechanics. Each file MUST contain `schema_version`; the MVP version is integer `1`. Unsupported versions MUST fail clearly rather than be interpreted silently. Configuration fields MUST be added only for implemented behavior or a demonstrated extension point that would otherwise require a breaking format change.
 
 **Rationale:** Separating operation from language policy keeps configuration understandable and prevents profile selection from changing technical permissions.
 
-**Verification:** Configuration-schema tests accept supported minimal examples, reject unsupported versions and invalid cross-boundary fields, and identify the failing field in the user-facing configuration error.
+**Verification:** Configuration-schema tests load the shipped `proofread` profile, accept supported minimal examples, reject unsupported versions, missing or unknown profile fields, duplicate or unsupported context-field names, and invalid cross-boundary fields, and identify the failing field in the user-facing configuration error.
 
 **Alternatives:** A single combined configuration file and profile-specific code paths were rejected because they blur authority and increase duplication.
 
 **Reconsider when:** Configuration growth makes two files less understandable than a versioned hierarchical format or when profiles require independently distributable packages.
 
-**Traceability:** Source proposal `SPEC-005` through `SPEC-007`, `SPEC-009`, `SPEC-016` through `SPEC-018`, and `SPEC-061` through `SPEC-064`; code and tests `UNKNOWN`.
+**Traceability:** Source proposal `SPEC-005` through `SPEC-007`, `SPEC-009`, `SPEC-016` through `SPEC-018`, and `SPEC-061` through `SPEC-064`; `config/profiles.json`; profile-loading code and tests `UNKNOWN`.
 
 ## API access and credentials {#api-access}
 
@@ -138,24 +138,25 @@ The core workflow MUST use a public LLM API and MUST NOT drive the ChatGPT web U
 
 **Normative:** The MVP MUST ship with a generic profile named `proofread` and use it when no profile is explicitly selected. Its editable instructions MUST require the model to:
 
-- correct spelling and grammar;
+- correct spelling and grammar, including punctuation and capitalization when required for correctness;
 - preserve meaning and factual claims;
-- preserve the original tone, register, slang, and community or technical terminology unless they are incorrect or confusing;
-- avoid unnecessary rewriting and keep length approximately unchanged;
+- preserve the original tone, register, slang, idioms, and community or technical terminology unless they are incorrect or confusing;
+- make only the minimum necessary changes, avoid style-only rewriting, and keep length, structure, formatting, and line breaks approximately unchanged unless a correction requires otherwise;
 - preserve the source English variant instead of silently converting between British and American conventions;
+- avoid translating, summarizing, answering, or executing the selected text; and
 - return the correction list and final corrected text required by `spec://proofreader/DESKTOP-ASSISTANT#structured-result`.
 
-The profile MUST express editing policy declaratively rather than require a separate implementation code path. Additional profiles are not required by the MVP.
+The profile MUST express editing policy declaratively rather than require a separate implementation code path. The complete accepted wording MUST reside in `profiles.proofread.instructions` in `config/profiles.json`, and request construction MUST use that value verbatim without a source-code fallback copy. `profiles.proofread.task` MUST be `proofread_english`, and `profiles.proofread.context_fields` MUST list `application_name`, `process_name`, and `window_title`; actual transmission remains limited to the intersection required by `spec://proofreader/DESKTOP-ASSISTANT#context-policy`. Additional profiles are not required by the MVP.
 
 **Rationale:** Explicit editing constraints produce more predictable proofreading than a broad tone label and keep policy editable without source changes.
 
-**Verification:** Profile-schema tests load `proofread`; request-builder snapshots contain each required policy; semantic acceptance examples cover casual, professional, slang-heavy, British, and American inputs.
+**Verification:** Profile-schema tests load `proofread` with the fixed task, prompt, and context-field list; request-builder snapshots contain the prompt verbatim and each required policy; semantic acceptance examples cover casual, professional, slang-heavy, British, and American inputs.
 
 **Alternatives:** Free-form prompts embedded in source code and automatic application-selected profiles were rejected for the MVP.
 
 **Reconsider when:** Real usage demonstrates a need for separate Discord, work, translation, rewriting, or grammar-only profiles.
 
-**Traceability:** `spec://proofreader/DESKTOP-ASSISTANT#configuration`; source proposal `SPEC-009`, `SPEC-016` through `SPEC-023`, `SPEC-037`, and `SPEC-038`; code and tests `UNKNOWN`.
+**Traceability:** `spec://proofreader/DESKTOP-ASSISTANT#configuration`; source proposal `SPEC-009`, `SPEC-016` through `SPEC-023`, `SPEC-037`, and `SPEC-038`; `config/profiles.json`; request-builder and profile-schema code and tests `UNKNOWN`.
 
 ## Context collection, minimization, and exclusions {#context-policy}
 
@@ -185,26 +186,76 @@ build_request(text, profile, source_context, settings) -> request
 
 The logical request MUST place stable profile instructions and the structured-output contract before dynamic per-request input. Dynamic input MAY contain only the selected text, permitted normalized source context, and an optional user-supplied note when that post-MVP feature exists. Selected text, source metadata, and manual notes MUST be treated as untrusted data to transform or interpret, not as authoritative instructions that override the profile contract. Source metadata MAY influence tone, register, and degree of rewriting but MUST NOT be treated as factual content of the selected message.
 
+For the MVP, the provider-neutral logical request MUST have the following exact typed structure. `ProofreadingResultSchema` is the single canonical schema defined by `spec://proofreader/DESKTOP-ASSISTANT#structured-result`; it is referenced here rather than redefined.
+
+```text
+LogicalRequest := {
+  parts: [
+    { kind: "instructions", text: ProfileInstructions },
+    { kind: "output_contract", schema: ProofreadingResultSchema },
+    {
+      kind: "input",
+      media_type: "application/json",
+      text: SerializedDynamicInput
+    }
+  ]
+}
+
+ProfileInstructions := the verbatim profiles.<profile-name>.instructions string
+SerializedDynamicInput := a JSON serialization of DynamicInput
+```
+
+The dynamic input object MUST have exactly the two top-level fields shown below before serialization. Context members marked `?` are optional; when present, their values MUST be a string or `null`.
+
+```text
+DynamicInput := {
+  source_context: {
+    application_name?: string | null,
+    process_name?: string | null,
+    window_title?: string | null
+  },
+  selected_text: non-empty string
+}
+```
+
+`source_context` MUST always be an object and MUST contain only fields permitted by both global settings and the selected profile. A permitted but unavailable value MUST be `null`, while a disallowed field MUST be omitted. `selected_text` MUST preserve the captured non-empty string exactly. The builder MUST create the `input` part's `text` with a JSON serializer from structured values and MUST NOT interpolate dynamic values into instructions or hand-build JSON. A provider adapter MAY map the three parts to provider-specific instruction, structured-output, and input fields, but MUST preserve their separation and authority order. Regardless of provider capabilities, the local response boundary MUST enforce `spec://proofreader/DESKTOP-ASSISTANT#structured-result`.
+
 Given identical selected text, profile, normalized context, and settings, the builder MUST produce the same logical request structure. Model output need not be byte-for-byte deterministic. Stable instruction prefixes SHOULD remain consistent to improve reproducibility and permit provider-side caching, but correctness MUST NOT depend on caching.
 
 **Rationale:** A deterministic, explicit request boundary is independently testable, auditable, and resistant to accidental mixing of instructions with application metadata.
 
-**Verification:** Snapshot or structural unit tests compare repeated builds, reject undeclared context fields, preserve stable/dynamic ordering, and verify that no local data is read implicitly by the builder.
+**Verification:** Snapshot or structural unit tests compare repeated builds; verify the exact ordered three-part envelope, output schema, and verbatim profile prompt; reject undeclared context fields; verify policy-intersection filtering and `null` handling; round-trip quotes, backslashes, Unicode, line breaks, and instruction-looking selected text through JSON serialization; preserve stable/dynamic authority ordering; and verify that no local data is read implicitly by the builder.
 
-**Alternatives:** Request construction inside the API client, implicit local-data reads, and correctness dependent on provider prompt caching were rejected.
+**Alternatives:** Request construction inside the API client, implicit local-data reads, free-form dynamic prompt concatenation, hand-built JSON, and correctness dependent on provider prompt caching were rejected.
 
 **Reconsider when:** A provider API requires a different representation while preserving the same logical contract, or approved conversational behavior introduces explicit state.
 
-**Traceability:** `spec://proofreader/DESKTOP-ASSISTANT#proofreading-profile`, `spec://proofreader/DESKTOP-ASSISTANT#context-policy`; source proposal `SPEC-026` through `SPEC-028`, `SPEC-051` through `SPEC-053`, and `SPEC-066`; code and tests `UNKNOWN`.
+**Traceability:** `spec://proofreader/DESKTOP-ASSISTANT#proofreading-profile`, `spec://proofreader/DESKTOP-ASSISTANT#context-policy`, `spec://proofreader/DESKTOP-ASSISTANT#structured-result`; source proposal `SPEC-026` through `SPEC-028`, `SPEC-051` through `SPEC-053`, and `SPEC-066`; `config/profiles.json`; request-builder code and tests `UNKNOWN`.
 
 ## Structured model result {#structured-result}
 
-**Normative:** The MVP MUST request and accept a simple machine-readable object with exactly these required semantic fields:
+**Normative:** The canonical `ProofreadingResultSchema` for every MVP model request and accepted response is:
 
 ```json
 {
-  "corrections": ["Concise description of a proposed correction"],
-  "final_text": "The complete corrected text"
+  "type": "object",
+  "properties": {
+    "corrections": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "final_text": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "corrections",
+    "final_text"
+  ],
+  "additionalProperties": false
 }
 ```
 
@@ -212,13 +263,13 @@ Given identical selected text, profile, normalized context, and settings, the bu
 
 **Rationale:** A small enforced structure reliably separates explanatory corrections from the text that may be copied automatically.
 
-**Verification:** Parser tests accept valid objects with populated and empty correction lists; reject missing, mistyped, malformed, and empty-final-text cases; and verify UI and clipboard consumers receive only normalized results.
+**Verification:** Parser tests accept valid objects with populated and empty correction lists; reject missing, additional, mistyped, malformed, and empty-final-text cases; and verify UI and clipboard consumers receive only normalized results.
 
 **Alternatives:** Parsing free-form prose and deferring structured output until after the MVP were explicitly rejected.
 
-**Reconsider when:** The UI requires source spans, typed edits, confidence, localization, or a provider-neutral schema version.
+**Reconsider when:** The UI requires source spans, typed edits, confidence, localization, multiple result shapes, or explicit result-schema versioning and migration.
 
-**Traceability:** `spec://proofreader/DESKTOP-ASSISTANT#request-construction`; source proposal `SPEC-023`, `SPEC-024`, `SPEC-033`, and `SPEC-056`; authorized human decision on 2026-09-01; code and tests `UNKNOWN`.
+**Traceability:** `spec://proofreader/DESKTOP-ASSISTANT#request-construction`; source proposal `SPEC-023`, `SPEC-024`, `SPEC-033`, and `SPEC-056`; Project owner decisions on 2026-09-01 and 2026-09-03; code and tests `UNKNOWN`.
 
 ## Selected-text and clipboard behavior {#clipboard}
 
@@ -373,3 +424,5 @@ Windows Credential Manager integration MUST be the first post-MVP implementation
   `DRAFT proposal -> APPROVED normative specification`; reason: `explicit approval by the declared Project owner in the current conversation`; invalidates: `pre-approval specification verification evidence; implementation and test conformance remain UNKNOWN`; review: `NONE`.
 - 2026-09-02 — Project owner — `spec://proofreader/DESKTOP-ASSISTANT#api-access`, `spec://proofreader/DESKTOP-ASSISTANT#testability`, `spec://proofreader/DESKTOP-ASSISTANT#mvp-scope`:
   `named runtime environment variable with unspecified local secret source; Credential Manager only deferred -> fixed MVP-development file source with process-local injection; credential-free default tests and explicit live tests; Credential Manager required as the first post-MVP task`; reason: `limit ambient credential exposure on the local development machine without blocking MVP work`; invalidates: `previous semantic verification for the affected anchors; launcher, backend, and live-test implementation remain UNKNOWN`; review: `NONE`.
+- 2026-09-03 — Project owner — `spec://proofreader/DESKTOP-ASSISTANT#configuration`, `spec://proofreader/DESKTOP-ASSISTANT#proofreading-profile`, `spec://proofreader/DESKTOP-ASSISTANT#request-construction`, `spec://proofreader/DESKTOP-ASSISTANT#structured-result`:
+  `abstract profile and request requirements with no stored default prompt -> fixed schema-version-1 profile fields, accepted generic proofreading policy, an exact ordered three-part logical request with serialized untrusted input, and one canonical strict result schema`; reason: `make the base request reproducible and store its editable prompt before request-builder implementation`; invalidates: `previous semantic verification for the affected anchors and any profile-schema, request-builder, or response-schema snapshots; profile loading, request building, and response parsing remain UNKNOWN`; review: `NONE`.

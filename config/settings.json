@@ -1,5 +1,13 @@
 {
   "schema_version": 1,
+  "default_profile": "proofread",
+  "context": {
+    "fields": [
+      "application_name",
+      "process_name",
+      "window_title"
+    ]
+  },
   "logging": {
     "path": "../logs/proofread-it.jsonl"
   }

@@ -1,9 +1,19 @@
 """Operational configuration loading."""
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
+from typing import cast
 
-from proofread_it.config.schemas import LoggingSettings, Settings
+from proofread_it.config.schemas import (
+    ContextField,
+    ContextSettings,
+    LoggingSettings,
+    Profile,
+    Settings,
+)
+
+_CONTEXT_FIELDS = frozenset(("application_name", "process_name", "window_title"))
 
 
 class ConfigurationError(ValueError):
@@ -12,16 +22,20 @@ class ConfigurationError(ValueError):
 
 def load_settings(path: Path) -> Settings:
     """Load the currently implemented subset of schema version 1 settings."""
-    try:
-        payload: object = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise ConfigurationError(f"Cannot load settings from {path}: {error}") from error
+    payload = _load_json_object(path, document_name="settings")
 
-    if not isinstance(payload, dict):
-        raise ConfigurationError("Settings must be a JSON object")
     schema_version = payload.get("schema_version")
     if type(schema_version) is not int or schema_version != 1:
         raise ConfigurationError("settings.schema_version must be 1")
+
+    default_profile = payload.get("default_profile")
+    if not isinstance(default_profile, str) or not default_profile.strip():
+        raise ConfigurationError("settings.default_profile must be a non-empty string")
+
+    context_payload = payload.get("context")
+    if not isinstance(context_payload, dict):
+        raise ConfigurationError("settings.context must be an object")
+    context_fields = _load_context_fields(context_payload.get("fields"), "settings.context.fields")
 
     logging_payload = payload.get("logging")
     if not isinstance(logging_payload, dict):
@@ -35,4 +49,91 @@ def load_settings(path: Path) -> Settings:
     if not log_path.is_absolute():
         log_path = path.parent / log_path
 
-    return Settings(schema_version=1, logging=LoggingSettings(path=log_path.resolve()))
+    return Settings(
+        schema_version=1,
+        default_profile=default_profile,
+        context=ContextSettings(fields=context_fields),
+        logging=LoggingSettings(path=log_path.resolve()),
+    )
+
+
+def load_profile(path: Path, name: str) -> Profile:
+    """Load one named profile from a schema-version-1 profiles document."""
+    payload = _load_json_object(path, document_name="profiles")
+    _require_exact_keys(payload, {"schema_version", "profiles"}, "profiles")
+
+    schema_version = payload.get("schema_version")
+    if type(schema_version) is not int or schema_version != 1:
+        raise ConfigurationError("profiles.schema_version must be 1")
+
+    profiles = payload.get("profiles")
+    if not isinstance(profiles, dict):
+        raise ConfigurationError("profiles.profiles must be an object")
+    raw_profile = profiles.get(name)
+    if not isinstance(raw_profile, dict):
+        raise ConfigurationError(f"profiles.profiles.{name} must be an object")
+
+    field_path = f"profiles.profiles.{name}"
+    _require_exact_keys(raw_profile, {"task", "instructions", "context_fields"}, field_path)
+
+    task = raw_profile.get("task")
+    if not isinstance(task, str) or not task.strip():
+        raise ConfigurationError(f"{field_path}.task must be a non-empty string")
+    instructions = raw_profile.get("instructions")
+    if not isinstance(instructions, str) or not instructions.strip():
+        raise ConfigurationError(f"{field_path}.instructions must be a non-empty string")
+    context_fields = _load_context_fields(
+        raw_profile.get("context_fields"), f"{field_path}.context_fields"
+    )
+
+    return Profile(
+        name=name,
+        task=task,
+        instructions=instructions,
+        context_fields=context_fields,
+    )
+
+
+def load_default_profile(path: Path, settings: Settings) -> Profile:
+    """Load the profile selected by operational settings."""
+    return load_profile(path, settings.default_profile)
+
+
+def _load_json_object(path: Path, *, document_name: str) -> dict[str, object]:
+    try:
+        payload: object = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ConfigurationError(f"Cannot load {document_name} from {path}: {error}") from error
+
+    if not isinstance(payload, dict):
+        raise ConfigurationError(f"{document_name} must be a JSON object")
+    return cast(dict[str, object], payload)
+
+
+def _require_exact_keys(
+    payload: Mapping[str, object], expected: set[str], field_path: str
+) -> None:
+    actual = set(payload)
+    missing = sorted(expected - actual)
+    if missing:
+        raise ConfigurationError(f"{field_path}.{missing[0]} is required")
+    unknown = sorted(actual - expected)
+    if unknown:
+        raise ConfigurationError(f"{field_path}.{unknown[0]} is not supported")
+
+
+def _load_context_fields(value: object, field_path: str) -> tuple[ContextField, ...]:
+    if not isinstance(value, list):
+        raise ConfigurationError(f"{field_path} must be an array")
+
+    fields: list[ContextField] = []
+    seen: set[str] = set()
+    for index, field in enumerate(value):
+        item_path = f"{field_path}[{index}]"
+        if not isinstance(field, str) or field not in _CONTEXT_FIELDS:
+            raise ConfigurationError(f"{item_path} is not a supported context field")
+        if field in seen:
+            raise ConfigurationError(f"{item_path} duplicates context field {field!r}")
+        seen.add(field)
+        fields.append(cast(ContextField, field))
+    return tuple(fields)

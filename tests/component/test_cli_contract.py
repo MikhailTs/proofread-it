@@ -15,7 +15,14 @@ def test_cli_logs_captured_text_and_invocation_context(
     log_path = tmp_path / "events.jsonl"
     settings_path = tmp_path / "settings.json"
     settings_path.write_text(
-        json.dumps({"schema_version": 1, "logging": {"path": log_path.name}}),
+        json.dumps(
+            {
+                "schema_version": 1,
+                "default_profile": "proofread",
+                "context": {"fields": []},
+                "logging": {"path": log_path.name},
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -69,7 +76,14 @@ def test_copy_final_does_not_open_result_window(
 ) -> None:
     settings_path = tmp_path / "settings.json"
     settings_path.write_text(
-        json.dumps({"schema_version": 1, "logging": {"path": "events.jsonl"}}),
+        json.dumps(
+            {
+                "schema_version": 1,
+                "default_profile": "proofread",
+                "context": {"fields": []},
+                "logging": {"path": "events.jsonl"},
+            }
+        ),
         encoding="utf-8",
     )
     monkeypatch.setenv("PROOFREAD_IT_SOURCE_TEXT", "Original text")
