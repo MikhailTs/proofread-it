@@ -25,15 +25,30 @@ Invoke(profile, action) {
     EnvSet("PROOFREAD_IT_SOURCE_TEXT", selectedText)
 
     command := Format(
-        'uv run --project "{1}" proofread-it --settings "{2}" --profile "{3}" --action "{4}"',
+        'uv run --project "{1}" --no-sync proofread-it --settings "{2}" --profile "{3}" --action "{4}"',
         ProjectRoot,
         SettingsPath,
         profile,
         action
     )
     try {
-        Run(command, ProjectRoot, "Hide")
+        process := ComObject("WScript.Shell").Exec(command)
+        correctedText := process.StdOut.ReadAll()
+        errorText := process.StdErr.ReadAll()
+        if (process.ExitCode != 0) {
+            message := Trim(errorText)
+            if (message = "") {
+                message := "Proofreading failed. See the application log for details."
+            }
+            MsgBox(message, "Proofread It", "Icon!")
+            return
+        }
+        if (action = "copy_final") {
+            A_Clipboard := correctedText
+        }
     } finally {
+        EnvSet("PROOFREAD_IT_SOURCE_PROCESS_NAME", "")
+        EnvSet("PROOFREAD_IT_SOURCE_WINDOW_TITLE", "")
         EnvSet("PROOFREAD_IT_SOURCE_TEXT", "")
     }
 }

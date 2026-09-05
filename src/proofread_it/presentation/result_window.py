@@ -5,10 +5,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from tkinter import scrolledtext, ttk
 
-PLACEHOLDER_EXPLANATION = (
-    "Proofreading is not connected yet. The original text is shown as the result."
-)
-
 
 @dataclass(frozen=True, slots=True)
 class ResultView:

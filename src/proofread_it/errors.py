@@ -35,3 +35,7 @@ class ProviderRequestError(ProviderError):
 
 class ProviderResponseError(ProviderError):
     """The provider returned an invalid API response envelope."""
+
+
+class MalformedResponseError(RuntimeError):
+    """The model output did not match the required proofreading-result shape."""

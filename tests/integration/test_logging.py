@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from proofread_it.app_logging import log_invocation
+from proofread_it.app_logging import log_event, log_invocation
 
 
 def test_invocations_are_appended_to_one_json_lines_file(tmp_path: Path) -> None:
@@ -36,3 +36,28 @@ def test_invocations_are_appended_to_one_json_lines_file(tmp_path: Path) -> None
         "firefox.exe",
         "Telegram.exe",
     ]
+
+
+def test_nested_credentials_and_authorization_values_are_redacted(tmp_path: Path) -> None:
+    log_path = tmp_path / "proofread-it.jsonl"
+    sentinel = "logging-sentinel-key"
+
+    log_event(
+        log_path,
+        {
+            "event": "provider_response",
+            "raw_response": {
+                "api_key": sentinel,
+                "headers": {"authorization": f"Bearer {sentinel}"},
+                "detail": f"request used {sentinel}",
+            },
+        },
+        sensitive_values=(sentinel,),
+    )
+
+    raw_log = log_path.read_text(encoding="utf-8")
+    event = json.loads(raw_log)
+    assert sentinel not in raw_log
+    assert event["raw_response"]["api_key"] == "[REDACTED]"
+    assert event["raw_response"]["headers"]["authorization"] == "[REDACTED]"
+    assert event["raw_response"]["detail"] == "request used [REDACTED]"

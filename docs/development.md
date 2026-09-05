@@ -9,25 +9,37 @@ uv run ruff check .
 uv run mypy src
 ```
 
-## Current invocation slice
+## Running the desktop application
 
-Install AutoHotkey v2, then run `automation/windows/proofread-it.ahk`. The script stays active
-and exposes the initial development bindings:
+Install AutoHotkey v2, put the development API key in
+`$env:USERPROFILE\.secrets\openai_token.txt`, then launch the application with:
 
-- `Ctrl+Alt+E` records a `proofread` / `show_full` invocation and opens the result window.
-- `Ctrl+Alt+Shift+E` records a `proofread` / `copy_final` invocation.
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start.ps1
+```
+
+The launcher reads the key only for startup, injects it into the AutoHotkey/backend child process
+tree, and restores the launcher's previous process environment immediately afterward. The script
+automatically detects standard per-user and system AutoHotkey v2 installations. If AutoHotkey is in
+a custom location, pass `-AutoHotkeyPath C:\path\to\AutoHotkey64.exe`. The script stays active and
+exposes the development bindings:
+
+- `Ctrl+Alt+E` sends a `proofread` / `show_full` request and opens the validated result window.
+- `Ctrl+Alt+Shift+E` sends a `proofread` / `copy_final` request and places only the validated final
+  text on the clipboard.
 
 Each hotkey preserves the current clipboard, copies the selected text with the active application's
 standard copy command, restores the clipboard, and passes non-empty text to the Python backend.
-The backend records the text together with the active process name and window title in one JSON
-event in `logs/proofread-it.jsonl`. For `show_full`, it then opens a minimal result window with a
-placeholder explanation and the original selected text as the temporary result. No API call is made
-yet, and `copy_final` does not change the clipboard in this slice. If copying does not produce text
-within one second, the backend is not started and a concise error is shown.
+The backend loads the selected profile, builds one stateless strict-schema request, calls the OpenAI
+Responses API, validates the returned corrections and final text, and performs the selected action.
+If copying does not produce text within one second, the backend is not started and a concise error is
+shown.
 
-The log contains sensitive selected text and window titles now and will also contain model data in
-later MVP slices. Keep it private and delete it according to your needs. The `logs/` directory is
-ignored by Git.
+Every completed or failed API invocation is appended to `logs/proofread-it.jsonl`. The event contains
+the selected text and source context, complete logical request, request duration, API status, model
+output, raw API response, normalized result, or safe error detail. API keys and authorization fields are
+redacted, but the remaining log is intentionally sensitive. Keep it private and delete it according
+to your needs. The `logs/` directory is ignored by Git.
 
 ## Development API credential
 
@@ -45,4 +57,9 @@ The explicit live-test wrapper reads the file only when invoked and injects its 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-live.ps1
 ```
 
-This command verifies process-local credential delivery and makes a real, billable OpenAI Responses API request using the model and limits in `config/settings.json`. The network test checks the response envelope and strict proofreading shape without asserting nondeterministic wording. A normal `uv run pytest` remains offline, does not read the real secret file, and excludes tests marked `live`. API sending is not connected to the desktop workflow yet; the application launcher will use the same process-local credential mechanism when that integration is implemented. Windows Credential Manager integration is the first post-MVP task.
+This command verifies process-local credential delivery and makes a real, billable OpenAI Responses
+API request using the model and limits in `config/settings.json`. The network test checks the response
+envelope and strict proofreading shape without asserting nondeterministic wording. A normal
+`uv run pytest` remains offline, does not read the real secret file, and excludes tests marked `live`.
+The application launcher uses the same process-local credential mechanism. Windows Credential
+Manager integration is the first post-MVP task.
