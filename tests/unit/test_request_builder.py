@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from proofread_it.config.schemas import (
+    ApiSettings,
     ContextSettings,
     LoggingSettings,
     Profile,
@@ -17,6 +18,13 @@ from proofread_it.requests.builder import PROOFREADING_RESULT_SCHEMA, build_requ
 def _settings(*context_fields: str) -> Settings:
     return Settings(  # type: ignore[arg-type]
         schema_version=1,
+        api=ApiSettings(
+            model="gpt-5.6-luna",
+            api_key_env="OPENAI_API_KEY",
+            timeout_seconds=30,
+            max_output_tokens=2048,
+            retry_count=2,
+        ),
         default_profile="proofread",
         context=ContextSettings(fields=context_fields),
         logging=LoggingSettings(path=Path("events.jsonl")),

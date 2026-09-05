@@ -18,6 +18,13 @@ def test_cli_logs_captured_text_and_invocation_context(
         json.dumps(
             {
                 "schema_version": 1,
+                "api": {
+                    "model": "gpt-5.6-luna",
+                    "api_key_env": "OPENAI_API_KEY",
+                    "timeout_seconds": 30,
+                    "max_output_tokens": 2048,
+                    "retry_count": 2,
+                },
                 "default_profile": "proofread",
                 "context": {"fields": []},
                 "logging": {"path": log_path.name},
@@ -79,6 +86,13 @@ def test_copy_final_does_not_open_result_window(
         json.dumps(
             {
                 "schema_version": 1,
+                "api": {
+                    "model": "gpt-5.6-luna",
+                    "api_key_env": "OPENAI_API_KEY",
+                    "timeout_seconds": 30,
+                    "max_output_tokens": 2048,
+                    "retry_count": 2,
+                },
                 "default_profile": "proofread",
                 "context": {"fields": []},
                 "logging": {"path": "events.jsonl"},

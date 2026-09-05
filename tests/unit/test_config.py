@@ -16,6 +16,13 @@ from proofread_it.config.loader import (
 def _settings_payload(log_path: str) -> dict[str, object]:
     return {
         "schema_version": 1,
+        "api": {
+            "model": "gpt-5.6-luna",
+            "api_key_env": "OPENAI_API_KEY",
+            "timeout_seconds": 30,
+            "max_output_tokens": 2048,
+            "retry_count": 2,
+        },
         "default_profile": "proofread",
         "context": {"fields": ["application_name", "window_title"]},
         "logging": {"path": log_path},
@@ -45,6 +52,65 @@ def test_boolean_schema_version_is_rejected(tmp_path: Path) -> None:
     )
 
     with pytest.raises(ConfigurationError, match="schema_version"):
+        load_settings(settings_path)
+
+
+@pytest.mark.parametrize(
+    "api_key_env",
+    [None, "", " OPENAI_API_KEY", "OPENAI_API_KEY ", "INVALID=NAME", "INVALID\x00NAME"],
+)
+def test_invalid_api_key_environment_variable_name_is_rejected(
+    tmp_path: Path,
+    api_key_env: object,
+) -> None:
+    settings_path = tmp_path / "settings.json"
+    payload = _settings_payload("events.jsonl")
+    api = payload["api"]
+    assert isinstance(api, dict)
+    api["api_key_env"] = api_key_env
+    settings_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ConfigurationError, match="settings.api.api_key_env"):
+        load_settings(settings_path)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("model", ""),
+        ("model", " gpt-5.6-luna"),
+        ("timeout_seconds", 0),
+        ("timeout_seconds", True),
+        ("max_output_tokens", -1),
+        ("retry_count", -1),
+        ("retry_count", False),
+    ],
+)
+def test_invalid_api_settings_identify_the_failing_field(
+    tmp_path: Path,
+    field: str,
+    value: object,
+) -> None:
+    settings_path = tmp_path / "settings.json"
+    payload = _settings_payload("events.jsonl")
+    api = payload["api"]
+    assert isinstance(api, dict)
+    api[field] = value
+    settings_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ConfigurationError, match=rf"settings\.api\.{field}"):
+        load_settings(settings_path)
+
+
+def test_unknown_api_setting_is_rejected(tmp_path: Path) -> None:
+    settings_path = tmp_path / "settings.json"
+    payload = _settings_payload("events.jsonl")
+    api = payload["api"]
+    assert isinstance(api, dict)
+    api["temperature"] = 0
+    settings_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ConfigurationError, match=r"settings\.api\.temperature"):
         load_settings(settings_path)
 
 

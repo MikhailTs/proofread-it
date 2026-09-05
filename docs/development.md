@@ -39,4 +39,10 @@ $env:USERPROFILE\.secrets\openai_token.txt
 
 Do not commit this file, copy the token into project configuration, pass it on a command line, or persist it in the Windows User or Machine environment. Restrict the file so that only the current Windows user can read it.
 
-The development launcher and explicit live-test wrapper, once implemented, will read the file only when invoked and inject its value into the environment variable selected by settings (`OPENAI_API_KEY` by default) only for the launched application or test process tree. This covers starting the AutoHotkey entry point and its backend without creating a persistent User or Machine variable. A normal `uv run pytest` must remain offline, must not read this file, and must exclude live API tests. Windows Credential Manager integration is the first post-MVP task.
+The explicit live-test wrapper reads the file only when invoked and injects its value into the environment variable selected by settings (`OPENAI_API_KEY` by default) only for its test process tree. It never creates a persistent Windows User or Machine variable. Run the live checks with:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-live.ps1
+```
+
+This command verifies process-local credential delivery and makes a real, billable OpenAI Responses API request using the model and limits in `config/settings.json`. The network test checks the response envelope and strict proofreading shape without asserting nondeterministic wording. A normal `uv run pytest` remains offline, does not read the real secret file, and excludes tests marked `live`. API sending is not connected to the desktop workflow yet; the application launcher will use the same process-local credential mechanism when that integration is implemented. Windows Credential Manager integration is the first post-MVP task.

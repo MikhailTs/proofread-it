@@ -5,7 +5,7 @@
 - Approval authority: `Project owner`
 - Supersedes: `NONE`
 - Superseded by: `NONE`
-- Updated: `2026-09-03`
+- Updated: `2026-09-04`
 
 ## Contract Summary {#summary}
 
@@ -104,6 +104,8 @@ Windows automation, context collection, profile selection, request construction,
 
 Operational settings MUST NOT contain proofreading-specific language rules. Profiles MUST NOT contain capture, credential, concurrency, file-path, or logging mechanics. Each file MUST contain `schema_version`; the MVP version is integer `1`. Unsupported versions MUST fail clearly rather than be interpreted silently. Configuration fields MUST be added only for implemented behavior or a demonstrated extension point that would otherwise require a breaking format change.
 
+For schema version `1`, `settings.api` MUST contain exactly `model`, `api_key_env`, `timeout_seconds`, `max_output_tokens`, and `retry_count`. `model` and `api_key_env` MUST be non-empty strings; `timeout_seconds` and `max_output_tokens` MUST be positive integers; and `retry_count` MUST be a non-negative integer. The shipped MVP values MUST be `gpt-5.6-luna`, `OPENAI_API_KEY`, `30`, `2048`, and `2`, respectively. The MVP MUST apply the fixed configured output-token limit to every request. Computing a dynamic output-token limit from the selected-text length is deferred until after MVP.
+
 **Rationale:** Separating operation from language policy keeps configuration understandable and prevents profile selection from changing technical permissions.
 
 **Verification:** Configuration-schema tests load the shipped `proofread` profile, accept supported minimal examples, reject unsupported versions, missing or unknown profile fields, duplicate or unsupported context-field names, and invalid cross-boundary fields, and identify the failing field in the user-facing configuration error.
@@ -117,6 +119,8 @@ Operational settings MUST NOT contain proofreading-specific language rules. Prof
 ## API access and credentials {#api-access}
 
 **Normative:** The backend MUST access the LLM through a small provider-facing API abstraction. `settings.json` MUST select the model, environment-variable name, request timeout, output-token limit when used, and retry count. For the MVP, the backend MUST read the API key from the named environment variable; `OPENAI_API_KEY` is the default example.
+
+The MVP provider adapter MUST use the official OpenAI Python SDK and its Responses API. It MUST map the provider-neutral instruction, structured-output contract, and serialized dynamic input to distinct Responses API fields; request strict JSON Schema output; set `store` to `false`; apply the configured model, timeout, output-token limit, and SDK retry count; and omit conversation and previous-response identifiers.
 
 During local MVP development, the sole secret source for application runs and explicitly selected live API tests MUST be `$env:USERPROFILE\.secrets\openai_token.txt`. A development launcher or live-test wrapper MUST read the file only when invoked and MUST inject its value into the named environment variable only for the launched application or test process tree. This includes starting the AutoHotkey entry point and allowing its backend child process to inherit the variable. It MUST NOT persist the key in the Windows User or Machine environment or pass the key on a command line. A missing, unreadable, or empty secret file MUST fail before any API request is attempted.
 
@@ -294,13 +298,13 @@ If no usable selection is obtained, the application MUST make no API request and
 - `show_full`: display the corrections and final corrected text; and
 - `copy_final`: place only normalized `final_text` on the clipboard.
 
-The initial defaults SHOULD be `Ctrl+Alt+E` for `show_full` and `Ctrl+Alt+Shift+E` for `copy_final`. The presentation MAY be a minimal Python window, a Tkinter dialog, or a development console plus clipboard behavior, but it MUST expose both result fields for `show_full` and MUST NOT bind the long-term architecture to that presentation technology.
+The initial defaults SHOULD be `Ctrl+Alt+E` for `show_full` and `Ctrl+Alt+Shift+E` for `copy_final`. The presentation MAY be a minimal Python window, a Tkinter dialog, or a development console plus clipboard behavior, but it MUST expose both result fields for `show_full` and MUST NOT bind the long-term architecture to that presentation technology. A dynamic in-progress indicator shown after hotkey handling begins and before a result or error is available is deferred until after MVP.
 
 **Rationale:** Two explicit actions cover inspection and fast replacement workflows without requiring a sophisticated GUI.
 
 **Verification:** Windows acceptance tests invoke each configured hotkey, verify explicit profile/action routing, inspect both fields for `show_full`, and compare clipboard contents for `copy_final`.
 
-**Alternatives:** Direct selection replacement, automatic profile selection, tray UI, and a full chat UI are deferred beyond the MVP.
+**Alternatives:** Direct selection replacement, automatic profile selection, a dynamic in-progress indicator, tray UI, and a full chat UI are deferred beyond the MVP.
 
 **Reconsider when:** User testing supports a single combined interaction or justifies direct replacement and richer result controls.
 
@@ -324,7 +328,7 @@ The initial defaults SHOULD be `Ctrl+Alt+E` for `show_full` and `Ctrl+Alt+Shift+
 
 **Normative:** The application MUST distinguish and handle missing credentials, invalid configuration, authentication failure, network timeout, connection failure, rate limiting, transient server failure, unsupported model, malformed structured response, and empty output. User-facing errors MUST be concise and MUST NOT expose credentials; the full available diagnostic detail MUST be logged subject to `spec://proofreader/DESKTOP-ASSISTANT#logging`.
 
-Timeout and retry count MUST be configurable. Automatic retries MUST be bounded and limited to transient connection failures, rate limits, and temporary server failures. Invalid credentials, invalid configuration, malformed requests, unsupported models, and invalid model responses MUST NOT be retried automatically.
+Timeout and retry count MUST be configurable. The OpenAI adapter MUST use the official SDK's built-in bounded retry mechanism with the configured `retry_count`. The accepted SDK retry policy includes connection failures, request timeouts, HTTP 409 conflicts, rate limits, and temporary server failures. Invalid credentials, invalid configuration, malformed requests, unsupported models, and invalid model responses MUST NOT be retried automatically.
 
 **Rationale:** Conservative retry behavior improves recovery without multiplying deterministic failures or hiding configuration problems.
 
@@ -392,7 +396,7 @@ Windows integration coverage MUST separately exercise active-window observation,
 
 **Normative:** The MVP includes Windows desktop support; AutoHotkey v2 global hotkeys; selected-text capture; clipboard preservation; a Python backend; versioned `settings.json` and `profiles.json`; the `proofread` profile; application/process detection; active-window-title capture; configured exclusions; stateless public-API access; development-time secret loading from `$env:USERPROFILE\.secrets\openai_token.txt` into a process-local environment variable; structured corrections plus final text; full-result display; final-text copy; one in-flight request; full single-file logging; and basic errors and bounded retries.
 
-The MVP explicitly excludes persistent conversations, chat UI, browser extensions, Discord and Telegram APIs, OCR, surrounding-message capture, sophisticated application-specific UI scraping, tray application, installer, cloud synchronization, direct replacement of selected text, Windows Credential Manager, automatic profile selection, manual context notes, local history, request queues, and multiple simultaneous requests.
+The MVP explicitly excludes persistent conversations, chat UI, browser extensions, Discord and Telegram APIs, OCR, surrounding-message capture, sophisticated application-specific UI scraping, tray application, installer, cloud synchronization, direct replacement of selected text, Windows Credential Manager, automatic profile selection, manual context notes, local history, request queues, multiple simultaneous requests, dynamic output-token limits derived from selected-text length, and a dynamic in-progress indicator between hotkey handling and the terminal result or error.
 
 Windows Credential Manager integration MUST be the first post-MVP implementation task and MUST replace the development file as the secret source. All other items excluded from the MVP are candidates only; this document does not authorize or require their implementation.
 
@@ -426,3 +430,5 @@ Windows Credential Manager integration MUST be the first post-MVP implementation
   `named runtime environment variable with unspecified local secret source; Credential Manager only deferred -> fixed MVP-development file source with process-local injection; credential-free default tests and explicit live tests; Credential Manager required as the first post-MVP task`; reason: `limit ambient credential exposure on the local development machine without blocking MVP work`; invalidates: `previous semantic verification for the affected anchors; launcher, backend, and live-test implementation remain UNKNOWN`; review: `NONE`.
 - 2026-09-03 — Project owner — `spec://proofreader/DESKTOP-ASSISTANT#configuration`, `spec://proofreader/DESKTOP-ASSISTANT#proofreading-profile`, `spec://proofreader/DESKTOP-ASSISTANT#request-construction`, `spec://proofreader/DESKTOP-ASSISTANT#structured-result`:
   `abstract profile and request requirements with no stored default prompt -> fixed schema-version-1 profile fields, accepted generic proofreading policy, an exact ordered three-part logical request with serialized untrusted input, and one canonical strict result schema`; reason: `make the base request reproducible and store its editable prompt before request-builder implementation`; invalidates: `previous semantic verification for the affected anchors and any profile-schema, request-builder, or response-schema snapshots; profile loading, request building, and response parsing remain UNKNOWN`; review: `NONE`.
+- 2026-09-04 — Project owner — `spec://proofreader/DESKTOP-ASSISTANT#configuration`, `spec://proofreader/DESKTOP-ASSISTANT#api-access`, `spec://proofreader/DESKTOP-ASSISTANT#interaction`, `spec://proofreader/DESKTOP-ASSISTANT#errors`, `spec://proofreader/DESKTOP-ASSISTANT#mvp-scope`:
+  `provider and API settings unspecified; retry policy provider-neutral; dynamic output sizing and in-progress feedback unclassified -> official OpenAI Python SDK Responses adapter with shipped model gpt-5.6-luna, 30-second timeout, fixed 2048-token output limit, two SDK-managed retries, and both dynamic output sizing and a dynamic in-progress indicator explicitly deferred until after MVP`; reason: `establish an implementable sending boundary while retaining two requested improvements outside MVP scope`; invalidates: `previous semantic verification for the affected anchors and API configuration, provider, retry, and interaction artifacts`; review: `NONE`.

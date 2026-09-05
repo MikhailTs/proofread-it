@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import cast
 
 from proofread_it.config.schemas import (
+    ApiSettings,
     ContextField,
     ContextSettings,
     LoggingSettings,
@@ -32,6 +33,45 @@ def load_settings(path: Path) -> Settings:
     if not isinstance(default_profile, str) or not default_profile.strip():
         raise ConfigurationError("settings.default_profile must be a non-empty string")
 
+    api_payload = payload.get("api")
+    if not isinstance(api_payload, dict):
+        raise ConfigurationError("settings.api must be an object")
+    _require_exact_keys(
+        api_payload,
+        {"model", "api_key_env", "timeout_seconds", "max_output_tokens", "retry_count"},
+        "settings.api",
+    )
+
+    model = api_payload.get("model")
+    if not isinstance(model, str) or not model.strip() or model.strip() != model:
+        raise ConfigurationError("settings.api.model must be a non-empty model name")
+
+    api_key_env = api_payload.get("api_key_env")
+    if (
+        not isinstance(api_key_env, str)
+        or not api_key_env
+        or api_key_env.strip() != api_key_env
+        or "=" in api_key_env
+        or "\x00" in api_key_env
+    ):
+        raise ConfigurationError("settings.api.api_key_env must be a valid environment variable name")
+
+    timeout_seconds = _load_integer(
+        api_payload.get("timeout_seconds"),
+        "settings.api.timeout_seconds",
+        minimum=1,
+    )
+    max_output_tokens = _load_integer(
+        api_payload.get("max_output_tokens"),
+        "settings.api.max_output_tokens",
+        minimum=1,
+    )
+    retry_count = _load_integer(
+        api_payload.get("retry_count"),
+        "settings.api.retry_count",
+        minimum=0,
+    )
+
     context_payload = payload.get("context")
     if not isinstance(context_payload, dict):
         raise ConfigurationError("settings.context must be an object")
@@ -51,6 +91,13 @@ def load_settings(path: Path) -> Settings:
 
     return Settings(
         schema_version=1,
+        api=ApiSettings(
+            model=model,
+            api_key_env=api_key_env,
+            timeout_seconds=timeout_seconds,
+            max_output_tokens=max_output_tokens,
+            retry_count=retry_count,
+        ),
         default_profile=default_profile,
         context=ContextSettings(fields=context_fields),
         logging=LoggingSettings(path=log_path.resolve()),
@@ -137,3 +184,10 @@ def _load_context_fields(value: object, field_path: str) -> tuple[ContextField, 
         seen.add(field)
         fields.append(cast(ContextField, field))
     return tuple(fields)
+
+
+def _load_integer(value: object, field_path: str, *, minimum: int) -> int:
+    if type(value) is not int or value < minimum:
+        qualifier = "a positive integer" if minimum == 1 else "a non-negative integer"
+        raise ConfigurationError(f"{field_path} must be {qualifier}")
+    return value
