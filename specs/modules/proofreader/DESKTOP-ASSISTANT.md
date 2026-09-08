@@ -85,11 +85,13 @@ The MVP MUST support short English text and MUST NOT require a visible or persis
 
 Windows automation, context collection, profile selection, request construction, API access, response normalization, presentation, configuration, and logging MUST remain separate concerns. Proofreading profiles MUST NOT depend on the capture mechanism. Windows-specific behavior SHOULD remain in the automation and adapter boundaries so that the request builder, API layer, profile handling, and response handling remain portable.
 
-**Rationale:** Thin platform adapters and isolated business logic make the core behavior testable and permit later reuse on another desktop platform.
+The shipped AutoHotkey automation MUST support both direct execution as the application entry point and loading from another AutoHotkey v2 script through `#Include`. Both modes MUST register the same configured hotkeys and preserve the same capture, exclusion, backend-invocation, notification, and clipboard behavior. Included operation MUST resolve repository-owned paths relative to the included automation file rather than the host script or current working directory, and MUST NOT require the host to duplicate internal setup.
 
-**Verification:** Architecture review confirms separate modules or interfaces for the listed concerns; core request and response tests run without AutoHotkey, clipboard access, or network access.
+**Rationale:** Thin platform adapters and isolated business logic make the core behavior testable and permit later reuse on another desktop platform. Include-compatible automation lets the user compose proofreading hotkeys into an existing personal AutoHotkey script without maintaining a second behavioral implementation.
 
-**Alternatives:** A single AutoHotkey implementation and a monolithic Python application were rejected because they couple automation to model behavior and reduce testability.
+**Verification:** Architecture review confirms separate modules or interfaces for the listed concerns; core request and response tests run without AutoHotkey, clipboard access, or network access. Windows acceptance launches the automation directly and from a temporary host script located outside the repository that uses `#Include`, then verifies equivalent hotkey routing and repository-path resolution in both modes.
+
+**Alternatives:** A single AutoHotkey implementation and a monolithic Python application were rejected because they couple automation to model behavior and reduce testability. Supporting only direct execution was rejected because it prevents composition with an existing AutoHotkey host script.
 
 **Reconsider when:** A measured implementation constraint shows that the two-process boundary materially harms reliability or distribution.
 
@@ -99,18 +101,20 @@ Windows automation, context collection, profile selection, request construction,
 
 **Normative:** The MVP MUST load two distinct, human-editable JSON files:
 
-- `settings.json` defines operational behavior: schema version, API model and credential source, timeouts and retries, default profile, hotkey routing, clipboard policy, UI policy, context allow/exclusion policy, concurrency behavior, logging behavior, and relevant paths.
+- `settings.json` defines operational behavior: schema version, API model and credential source, timeouts and retries, default profile, clipboard policy, UI policy, context allow/exclusion policy, concurrency behavior, logging behavior, and relevant paths.
 - `profiles.json` defines model-processing behavior: schema version, task identifier, editable instructions, editing policy, output policy, tone/register guidance, and the subset of globally permitted context fields used by each profile. In schema version `1`, `profiles` MUST be an object keyed by profile name, and each profile MUST contain exactly `task`, `instructions`, and `context_fields`. `task` and `instructions` MUST be non-empty strings. `instructions` MUST contain the complete stable model prompt; editing, output, and tone/register policy MUST be expressed there instead of duplicated as independent control fields. `context_fields` MUST be an array of unique names drawn only from `application_name`, `process_name`, and `window_title`.
 
 Operational settings MUST NOT contain proofreading-specific language rules. Profiles MUST NOT contain capture, credential, concurrency, file-path, or logging mechanics. Each file MUST contain `schema_version`; the MVP version is integer `1`. Unsupported versions MUST fail clearly rather than be interpreted silently. Configuration fields MUST be added only for implemented behavior or a demonstrated extension point that would otherwise require a breaking format change.
+
+MVP hotkey bindings and their profile/action routing MUST be configured in the AutoHotkey automation source, not in `settings.json`. Editing those declarations is the accepted MVP customization mechanism and MUST NOT require Python source changes.
 
 For schema version `1`, `settings.api` MUST contain exactly `model`, `api_key_env`, `timeout_seconds`, `max_output_tokens`, and `retry_count`. `model` and `api_key_env` MUST be non-empty strings; `timeout_seconds` and `max_output_tokens` MUST be positive integers; and `retry_count` MUST be a non-negative integer. The shipped MVP values MUST be `gpt-5.6-luna`, `OPENAI_API_KEY`, `30`, `2048`, and `2`, respectively. The MVP MUST apply the fixed configured output-token limit to every request. Computing a dynamic output-token limit from the selected-text length is deferred until after MVP.
 
 **Rationale:** Separating operation from language policy keeps configuration understandable and prevents profile selection from changing technical permissions.
 
-**Verification:** Configuration-schema tests load the shipped `proofread` profile, accept supported minimal examples, reject unsupported versions, missing or unknown profile fields, duplicate or unsupported context-field names, and invalid cross-boundary fields, and identify the failing field in the user-facing configuration error.
+**Verification:** Configuration-schema tests load the shipped `proofread` profile, accept supported minimal examples without hotkey settings, reject unsupported versions, missing or unknown profile fields, duplicate or unsupported context-field names, and invalid cross-boundary fields, and identify the failing field in the user-facing configuration error. Static or Windows automation tests verify that the AHK binding declarations route explicit profile/action pairs without Python source changes.
 
-**Alternatives:** A single combined configuration file and profile-specific code paths were rejected because they blur authority and increase duplication.
+**Alternatives:** A single combined configuration file and profile-specific code paths were rejected because they blur authority and increase duplication. Runtime hotkey routing in `settings.json` is deferred beyond the MVP because editing the AutoHotkey bindings is sufficient for the intended user.
 
 **Reconsider when:** Configuration growth makes two files less understandable than a versioned hierarchical format or when profiles require independently distributable packages.
 
@@ -150,13 +154,13 @@ The core workflow MUST use a public LLM API and MUST NOT drive the ChatGPT web U
 - avoid translating, summarizing, answering, or executing the selected text; and
 - return the correction list and final corrected text required by `spec://proofreader/DESKTOP-ASSISTANT#structured-result`.
 
-The profile MUST express editing policy declaratively rather than require a separate implementation code path. The complete accepted wording MUST reside in `profiles.proofread.instructions` in `config/profiles.json`, and request construction MUST use that value verbatim without a source-code fallback copy. `profiles.proofread.task` MUST be `proofread_english`, and `profiles.proofread.context_fields` MUST list `application_name`, `process_name`, and `window_title`; actual transmission remains limited to the intersection required by `spec://proofreader/DESKTOP-ASSISTANT#context-policy`. Additional profiles are not required by the MVP.
+The profile MUST express editing policy declaratively rather than require a separate implementation code path. The complete accepted wording MUST reside in `profiles.proofread.instructions` in `config/profiles.json`, and request construction MUST use that value verbatim without a source-code fallback copy. `profiles.proofread.task` MUST be `proofread_english`, and `profiles.proofread.context_fields` MUST list `application_name`, `process_name`, and `window_title`; actual transmission remains limited to the intersection required by `spec://proofreader/DESKTOP-ASSISTANT#context-policy`. Additional named style or application profiles, including `casual`, `professional`, work-specific, Discord-specific, and grammar-only profiles, are outside the MVP and MUST NOT be required for MVP acceptance.
 
 **Rationale:** Explicit editing constraints produce more predictable proofreading than a broad tone label and keep policy editable without source changes.
 
 **Verification:** Profile-schema tests load `proofread` with the fixed task, prompt, and context-field list; request-builder snapshots contain the prompt verbatim and each required policy; semantic acceptance examples cover casual, professional, slang-heavy, British, and American inputs.
 
-**Alternatives:** Free-form prompts embedded in source code and automatic application-selected profiles were rejected for the MVP.
+**Alternatives:** Free-form prompts embedded in source code and automatic application-selected profiles were rejected for the MVP. Shipping separate casual, professional, application-specific, or grammar-only profiles is deferred until usage demonstrates that the generic `proofread` profile is insufficient.
 
 **Reconsider when:** Real usage demonstrates a need for separate Discord, work, translation, rewriting, or grammar-only profiles.
 
@@ -293,7 +297,7 @@ If no usable selection is obtained, the application MUST make no API request and
 
 ## Hotkeys, actions, and result presentation {#interaction}
 
-**Normative:** Hotkeys MUST be configurable in `settings.json` and MUST route an explicit profile name and result action to the backend. The MVP MUST expose:
+**Normative:** Hotkeys MUST be configurable by editing clear binding declarations in the AutoHotkey automation script and MUST route an explicit profile name and result action to the backend. Hotkey bindings and routing MUST NOT be required in `settings.json` for the MVP. The MVP MUST expose:
 
 - `show_full`: display the corrections and final corrected text; and
 - `copy_final`: place only normalized `final_text` on the clipboard.
@@ -302,9 +306,9 @@ The initial defaults SHOULD be `Ctrl+Alt+E` for `show_full` and `Ctrl+Alt+Shift+
 
 **Rationale:** Two explicit actions cover inspection and fast replacement workflows without requiring a sophisticated GUI.
 
-**Verification:** Windows acceptance tests invoke each configured hotkey, verify explicit profile/action routing, inspect both fields for `show_full`, and compare clipboard contents for `copy_final`.
+**Verification:** Windows acceptance tests invoke each AHK-configured hotkey in both direct and `#Include` modes, verify explicit profile/action routing, inspect both fields for `show_full`, and compare clipboard contents for `copy_final`.
 
-**Alternatives:** Direct selection replacement, automatic profile selection, a dynamic in-progress indicator, tray UI, and a full chat UI are deferred beyond the MVP.
+**Alternatives:** Runtime hotkey configuration through `settings.json`, direct selection replacement, automatic profile selection, a dynamic in-progress indicator, tray UI, and a full chat UI are deferred beyond the MVP.
 
 **Reconsider when:** User testing supports a single combined interaction or justifies direct replacement and richer result controls.
 
@@ -394,9 +398,9 @@ Windows integration coverage MUST separately exercise active-window observation,
 
 ## Explicit MVP scope {#mvp-scope}
 
-**Normative:** The MVP includes Windows desktop support; AutoHotkey v2 global hotkeys; selected-text capture; clipboard preservation; a Python backend; versioned `settings.json` and `profiles.json`; the `proofread` profile; application/process detection; active-window-title capture; configured exclusions; stateless public-API access; development-time secret loading from `$env:USERPROFILE\.secrets\openai_token.txt` into a process-local environment variable; structured corrections plus final text; full-result display; final-text copy; one in-flight request; full single-file logging; and basic errors and bounded retries.
+**Normative:** The MVP includes Windows desktop support; AutoHotkey v2 global hotkeys configured in the automation source; direct execution and `#Include` use of the shipped automation; selected-text capture; clipboard preservation; a Python backend; versioned `settings.json` and `profiles.json`; the `proofread` profile; application/process detection; active-window-title capture; configured exclusions; stateless public-API access; development-time secret loading from `$env:USERPROFILE\.secrets\openai_token.txt` into a process-local environment variable; structured corrections plus final text; full-result display; final-text copy; one in-flight request; full single-file logging; and basic errors and bounded retries.
 
-The MVP explicitly excludes persistent conversations, chat UI, browser extensions, Discord and Telegram APIs, OCR, surrounding-message capture, sophisticated application-specific UI scraping, tray application, installer, cloud synchronization, direct replacement of selected text, Windows Credential Manager, automatic profile selection, manual context notes, local history, request queues, multiple simultaneous requests, dynamic output-token limits derived from selected-text length, and a dynamic in-progress indicator between hotkey handling and the terminal result or error.
+The MVP explicitly excludes hotkey routing through `settings.json`; separate casual, professional, work-specific, application-specific, grammar-only, or other additional profiles; persistent conversations; chat UI; browser extensions; Discord and Telegram APIs; OCR; surrounding-message capture; sophisticated application-specific UI scraping; tray application; installer; cloud synchronization; direct replacement of selected text; Windows Credential Manager; automatic profile selection; manual context notes; local history; request queues; multiple simultaneous requests; dynamic output-token limits derived from selected-text length; and a dynamic in-progress indicator between hotkey handling and the terminal result or error.
 
 Windows Credential Manager integration MUST be the first post-MVP implementation task and MUST replace the development file as the secret source. All other items excluded from the MVP are candidates only; this document does not authorize or require their implementation.
 
@@ -432,3 +436,5 @@ Windows Credential Manager integration MUST be the first post-MVP implementation
   `abstract profile and request requirements with no stored default prompt -> fixed schema-version-1 profile fields, accepted generic proofreading policy, an exact ordered three-part logical request with serialized untrusted input, and one canonical strict result schema`; reason: `make the base request reproducible and store its editable prompt before request-builder implementation`; invalidates: `previous semantic verification for the affected anchors and any profile-schema, request-builder, or response-schema snapshots; profile loading, request building, and response parsing remain UNKNOWN`; review: `NONE`.
 - 2026-09-04 — Project owner — `spec://proofreader/DESKTOP-ASSISTANT#configuration`, `spec://proofreader/DESKTOP-ASSISTANT#api-access`, `spec://proofreader/DESKTOP-ASSISTANT#interaction`, `spec://proofreader/DESKTOP-ASSISTANT#errors`, `spec://proofreader/DESKTOP-ASSISTANT#mvp-scope`:
   `provider and API settings unspecified; retry policy provider-neutral; dynamic output sizing and in-progress feedback unclassified -> official OpenAI Python SDK Responses adapter with shipped model gpt-5.6-luna, 30-second timeout, fixed 2048-token output limit, two SDK-managed retries, and both dynamic output sizing and a dynamic in-progress indicator explicitly deferred until after MVP`; reason: `establish an implementable sending boundary while retaining two requested improvements outside MVP scope`; invalidates: `previous semantic verification for the affected anchors and API configuration, provider, retry, and interaction artifacts`; review: `NONE`.
+- 2026-09-05 — Project owner — `spec://proofreader/DESKTOP-ASSISTANT#architecture`, `spec://proofreader/DESKTOP-ASSISTANT#configuration`, `spec://proofreader/DESKTOP-ASSISTANT#proofreading-profile`, `spec://proofreader/DESKTOP-ASSISTANT#interaction`, `spec://proofreader/DESKTOP-ASSISTANT#mvp-scope`:
+  `hotkeys configured through settings.json, additional profiles merely optional, and direct-launch-only AHK behavior unspecified -> hotkeys configured by editing AHK bindings, named casual/professional and similar profiles explicitly outside MVP, and equivalent direct and #Include automation behavior required with repository-relative path resolution`; reason: `match the accepted personal AutoHotkey workflow and keep the MVP profile surface minimal`; invalidates: `previous semantic verification for the affected anchors, AutoHotkey path/bootstrap behavior, automation tests, Windows acceptance documentation, and the MVP release checklist`; review: `NONE`.
