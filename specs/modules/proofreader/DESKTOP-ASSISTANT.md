@@ -5,7 +5,7 @@
 - Approval authority: `Project owner`
 - Supersedes: `NONE`
 - Superseded by: `NONE`
-- Updated: `2026-09-04`
+- Updated: `2026-09-09`
 
 ## Contract Summary {#summary}
 
@@ -126,21 +126,23 @@ For schema version `1`, `settings.api` MUST contain exactly `model`, `api_key_en
 
 The MVP provider adapter MUST use the official OpenAI Python SDK and its Responses API. It MUST map the provider-neutral instruction, structured-output contract, and serialized dynamic input to distinct Responses API fields; request strict JSON Schema output; set `store` to `false`; apply the configured model, timeout, output-token limit, and SDK retry count; and omit conversation and previous-response identifiers.
 
-During local MVP development, the sole secret source for application runs and explicitly selected live API tests MUST be `$env:USERPROFILE\.secrets\openai_token.txt`. A development launcher or live-test wrapper MUST read the file only when invoked and MUST inject its value into the named environment variable only for the launched application or test process tree. This includes starting the AutoHotkey entry point and allowing its backend child process to inherit the variable. It MUST NOT persist the key in the Windows User or Machine environment or pass the key on a command line. A missing, unreadable, or empty secret file MUST fail before any API request is attempted.
+During local MVP development, the sole secret source for application runs and explicitly selected live API tests MUST be `$env:USERPROFILE\.secrets\openai_token.txt`. For an application request, a short-lived credential wrapper MUST read the file only after the AutoHotkey automation has accepted a proofreading action and MUST inject its value into the named environment variable only for that request's Python backend process tree. The long-lived AutoHotkey automation, including any external script that loads it through `#Include`, MUST NOT receive the key in its environment, read the secret file, or make the key available to unrelated child processes. Starting the automation MUST NOT require a credential-bearing parent launcher.
+
+The explicit live-test wrapper MAY inject the key into only its selected test process tree. Neither wrapper MUST persist the key in the Windows User or Machine environment or pass the key on a command line. A missing, unreadable, or empty secret file MUST fail before any API request is attempted.
 
 The key and authorization material MUST NOT be stored in repository files or `settings.json`, included in the logical request, exposed in process arguments, or written to logs. The external development secret file MUST NOT be committed and SHOULD be readable only by the current Windows user.
 
 The core workflow MUST use a public LLM API and MUST NOT drive the ChatGPT web UI or reproduce private browser requests.
 
-**Rationale:** Isolating the provider SDK reduces coupling. Loading the development key immediately before launch limits ambient exposure while preserving the environment-variable contract expected by API clients. The external plaintext file is an accepted temporary local-development tradeoff until an OS-native secret store replaces it.
+**Rationale:** Isolating the provider SDK reduces coupling. Loading the development key only for one backend invocation preserves the environment-variable contract expected by API clients without exposing the key to a long-lived automation host or its unrelated child processes. The external plaintext file is an accepted temporary local-development tradeoff until an OS-native secret store replaces it.
 
-**Verification:** API-client unit tests use a fake provider. Launcher and live-test-wrapper tests use a temporary sentinel file and demonstrate process-local injection, failure before an API call for a missing, unreadable, or empty file, and absence of persistent User or Machine environment changes. Configuration, process-argument, and log tests scan outputs for the sentinel API key and authorization header and find neither. Verification MUST NOT read the real development secret file.
+**Verification:** API-client unit tests use a fake provider. Automation-launcher and per-invocation-wrapper tests use a temporary sentinel file and demonstrate that the AutoHotkey process and an unrelated host child cannot observe the key, while exactly the selected backend process tree can. Invocation-wrapper and live-test-wrapper tests demonstrate failure before an API call for a missing, unreadable, or empty file and absence of persistent User or Machine environment changes. Configuration, process-argument, output, and log tests scan for the sentinel API key and authorization header and find neither. Verification MUST NOT read the real development secret file.
 
-**Alternatives:** Direct SDK calls throughout the application, keys in project configuration, persistent User or Machine environment variables, command-line key arguments, and ChatGPT DOM automation are rejected. Windows Credential Manager is deferred during the MVP but is the required first post-MVP improvement.
+**Alternatives:** A credential-bearing AutoHotkey process or external host, direct SDK calls throughout the application, keys in project configuration, persistent User or Machine environment variables, command-line key arguments, and ChatGPT DOM automation are rejected. Windows Credential Manager is deferred during the MVP but is the required first post-MVP improvement.
 
 **Reconsider when:** MVP development ends, the application is distributed beyond the current local development setup, or organization-managed credentials are required. The first post-MVP reconsideration MUST replace the file source with Windows Credential Manager while preserving process-local delivery to the backend.
 
-**Traceability:** `spec://proofreader/DESKTOP-ASSISTANT#configuration`, `docs/development.md`; source proposal `SPEC-007`, `SPEC-008`, `SPEC-050`, and `SPEC-055`; Project owner decision on 2026-09-02; launcher, backend, and live-test implementation `UNKNOWN`.
+**Traceability:** `spec://proofreader/DESKTOP-ASSISTANT#configuration`, `docs/development.md`; source proposal `SPEC-007`, `SPEC-008`, `SPEC-050`, and `SPEC-055`; Project owner decisions on 2026-09-02 and 2026-09-09; `scripts/start.ps1`, planned per-invocation wrapper, `automation/windows/proofread-it.ahk`, and credential tests.
 
 ## Proofreading profile contract {#proofreading-profile}
 
@@ -388,17 +390,17 @@ Windows integration coverage MUST separately exercise active-window observation,
 
 **Rationale:** Pure core components provide fast deterministic evidence while narrow Windows integration tests cover the platform boundary.
 
-**Verification:** The project test runner can execute core unit tests offline with the development secret file absent; component tests demonstrate fake API injection and normalized result consumption; the default run excludes live API tests; Windows acceptance commands are documented and reproducible. Live-test-wrapper tests use only a sentinel credential and do not expose it in output.
+**Verification:** The project test runner can execute core unit tests offline with the development secret file absent; component tests demonstrate fake API injection and normalized result consumption; the default run excludes live API tests; Windows acceptance commands are documented and reproducible. Per-invocation-wrapper and live-test-wrapper tests use only a sentinel credential, prove their respective process boundaries, and do not expose it in output.
 
 **Alternatives:** End-to-end-only verification was rejected because it makes provider and clipboard failures hard to isolate.
 
 **Reconsider when:** The implementation language or packaging model changes while preserving equivalent isolation and evidence.
 
-**Traceability:** `spec://proofreader/DESKTOP-ASSISTANT#architecture`, `spec://proofreader/DESKTOP-ASSISTANT#api-access`, `spec://proofreader/DESKTOP-ASSISTANT#request-construction`, `spec://proofreader/DESKTOP-ASSISTANT#structured-result`, `docs/development.md`; source proposal `SPEC-052` through `SPEC-056`; Project owner decision on 2026-09-02; code and tests `UNKNOWN`.
+**Traceability:** `spec://proofreader/DESKTOP-ASSISTANT#architecture`, `spec://proofreader/DESKTOP-ASSISTANT#api-access`, `spec://proofreader/DESKTOP-ASSISTANT#request-construction`, `spec://proofreader/DESKTOP-ASSISTANT#structured-result`, `docs/development.md`; source proposal `SPEC-052` through `SPEC-056`; Project owner decisions on 2026-09-02 and 2026-09-09; credential-wrapper and launcher tests.
 
 ## Explicit MVP scope {#mvp-scope}
 
-**Normative:** The MVP includes Windows desktop support; AutoHotkey v2 global hotkeys configured in the automation source; direct execution and `#Include` use of the shipped automation; selected-text capture; clipboard preservation; a Python backend; versioned `settings.json` and `profiles.json`; the `proofread` profile; application/process detection; active-window-title capture; configured exclusions; stateless public-API access; development-time secret loading from `$env:USERPROFILE\.secrets\openai_token.txt` into a process-local environment variable; structured corrections plus final text; full-result display; final-text copy; one in-flight request; full single-file logging; and basic errors and bounded retries.
+**Normative:** The MVP includes Windows desktop support; AutoHotkey v2 global hotkeys configured in the automation source; direct execution and `#Include` use of the shipped automation; selected-text capture; clipboard preservation; a Python backend; versioned `settings.json` and `profiles.json`; the `proofread` profile; application/process detection; active-window-title capture; configured exclusions; stateless public-API access; development-time per-invocation secret loading from `$env:USERPROFILE\.secrets\openai_token.txt` into only the selected Python backend process tree, never the long-lived AutoHotkey process; structured corrections plus final text; full-result display; final-text copy; one in-flight request; full single-file logging; and basic errors and bounded retries.
 
 The MVP explicitly excludes hotkey routing through `settings.json`; separate casual, professional, work-specific, application-specific, grammar-only, or other additional profiles; persistent conversations; chat UI; browser extensions; Discord and Telegram APIs; OCR; surrounding-message capture; sophisticated application-specific UI scraping; tray application; installer; cloud synchronization; direct replacement of selected text; Windows Credential Manager; automatic profile selection; manual context notes; local history; request queues; multiple simultaneous requests; dynamic output-token limits derived from selected-text length; and a dynamic in-progress indicator between hotkey handling and the terminal result or error.
 
@@ -412,7 +414,7 @@ Windows Credential Manager integration MUST be the first post-MVP implementation
 
 **Reconsider when:** MVP acceptance is complete; Windows Credential Manager integration then takes precedence over other feature increments.
 
-**Traceability:** All decisions in this specification; `spec://proofreader/DESKTOP-ASSISTANT#api-access`; source proposal `SPEC-057` through `SPEC-059`; Project owner decision on 2026-09-02; code and tests `UNKNOWN`.
+**Traceability:** All decisions in this specification; `spec://proofreader/DESKTOP-ASSISTANT#api-access`; source proposal `SPEC-057` through `SPEC-059`; Project owner decisions on 2026-09-02 and 2026-09-09; code and tests `UNKNOWN`.
 
 ## Cross-Cutting Invariants {#invariants}
 
@@ -438,3 +440,5 @@ Windows Credential Manager integration MUST be the first post-MVP implementation
   `provider and API settings unspecified; retry policy provider-neutral; dynamic output sizing and in-progress feedback unclassified -> official OpenAI Python SDK Responses adapter with shipped model gpt-5.6-luna, 30-second timeout, fixed 2048-token output limit, two SDK-managed retries, and both dynamic output sizing and a dynamic in-progress indicator explicitly deferred until after MVP`; reason: `establish an implementable sending boundary while retaining two requested improvements outside MVP scope`; invalidates: `previous semantic verification for the affected anchors and API configuration, provider, retry, and interaction artifacts`; review: `NONE`.
 - 2026-09-05 — Project owner — `spec://proofreader/DESKTOP-ASSISTANT#architecture`, `spec://proofreader/DESKTOP-ASSISTANT#configuration`, `spec://proofreader/DESKTOP-ASSISTANT#proofreading-profile`, `spec://proofreader/DESKTOP-ASSISTANT#interaction`, `spec://proofreader/DESKTOP-ASSISTANT#mvp-scope`:
   `hotkeys configured through settings.json, additional profiles merely optional, and direct-launch-only AHK behavior unspecified -> hotkeys configured by editing AHK bindings, named casual/professional and similar profiles explicitly outside MVP, and equivalent direct and #Include automation behavior required with repository-relative path resolution`; reason: `match the accepted personal AutoHotkey workflow and keep the MVP profile surface minimal`; invalidates: `previous semantic verification for the affected anchors, AutoHotkey path/bootstrap behavior, automation tests, Windows acceptance documentation, and the MVP release checklist`; review: `NONE`.
+- 2026-09-09 — Project owner — `spec://proofreader/DESKTOP-ASSISTANT#api-access`, `spec://proofreader/DESKTOP-ASSISTANT#testability`, `spec://proofreader/DESKTOP-ASSISTANT#mvp-scope`:
+  `development launcher injects the API key into the long-lived AutoHotkey application process tree -> a short-lived per-invocation wrapper injects the key only into the selected Python backend process tree, while the AutoHotkey automation and any external host never receive it`; reason: `prevent a long-lived personal AutoHotkey host and its unrelated child processes from inheriting the API credential`; invalidates: `credential launcher and wrapper implementation, AutoHotkey backend invocation, credential-scope tests, development and Windows acceptance documentation, and prior credential-related manual acceptance`; review: `NONE`.
