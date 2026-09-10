@@ -1,14 +1,16 @@
 #Requires AutoHotkey v2.0
 #SingleInstance Force
 
-ProjectRoot := A_ScriptDir "\..\.."
+SplitPath(A_LineFile, , &AutomationDir)
+ProjectRoot := AutomationDir "\..\.."
 SettingsPath := ProjectRoot "\config\settings.json"
+InvokeScriptPath := ProjectRoot "\scripts\invoke.ps1"
 
 ^!e::Invoke("proofread", "show_full")
 ^!+e::Invoke("proofread", "copy_final")
 
 Invoke(profile, action) {
-    global ProjectRoot, SettingsPath
+    global InvokeScriptPath, SettingsPath
 
     activeWindow := WinExist("A")
     processName := activeWindow ? WinGetProcessName("ahk_id " activeWindow) : ""
@@ -25,8 +27,8 @@ Invoke(profile, action) {
     EnvSet("PROOFREAD_IT_SOURCE_TEXT", selectedText)
 
     command := Format(
-        'uv run --project "{1}" --no-sync proofread-it --settings "{2}" --profile "{3}" --action "{4}"',
-        ProjectRoot,
+        'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{1}" -SettingsPath "{2}" -Profile "{3}" -Action "{4}"',
+        InvokeScriptPath,
         SettingsPath,
         profile,
         action

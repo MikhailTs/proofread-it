@@ -18,11 +18,11 @@ Install AutoHotkey v2, put the development API key in
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start.ps1
 ```
 
-The launcher reads the key only for startup, injects it into the AutoHotkey/backend child process
-tree, and restores the launcher's previous process environment immediately afterward. The script
-automatically detects standard per-user and system AutoHotkey v2 installations. If AutoHotkey is in
-a custom location, pass `-AutoHotkeyPath C:\path\to\AutoHotkey64.exe`. The script stays active and
-exposes the development bindings:
+The startup script does not read or inject the API credential. It only detects standard per-user and
+system AutoHotkey v2 installations and starts the automation without the key in its environment. If
+AutoHotkey is in a custom location, pass `-AutoHotkeyPath C:\path\to\AutoHotkey64.exe`. The
+automation can also be started directly or loaded from an existing AutoHotkey v2 host with
+`#Include`; all three modes expose the development bindings:
 
 - `Ctrl+Alt+E` sends a `proofread` / `show_full` request and opens the validated result window.
 - `Ctrl+Alt+Shift+E` sends a `proofread` / `copy_final` request and places only the validated final
@@ -61,5 +61,7 @@ This command verifies process-local credential delivery and makes a real, billab
 API request using the model and limits in `config/settings.json`. The network test checks the response
 envelope and strict proofreading shape without asserting nondeterministic wording. A normal
 `uv run pytest` remains offline, does not read the real secret file, and excludes tests marked `live`.
-The application launcher uses the same process-local credential mechanism. Windows Credential
-Manager integration is the first post-MVP task.
+For each accepted hotkey action, `scripts/invoke.ps1` reads the credential file and injects the key
+only into that short-lived backend invocation process tree. The long-lived AutoHotkey automation and
+any external host never receive the key. The wrapper restores its previous process environment after
+the backend exits. Windows Credential Manager integration is the first post-MVP task.
