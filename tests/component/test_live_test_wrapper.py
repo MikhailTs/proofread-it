@@ -24,7 +24,10 @@ def _write_settings(path: Path) -> None:
                     "retry_count": 2,
                 },
                 "default_profile": "proofread",
-                "context": {"fields": []},
+                "context": {
+                    "fields": [],
+                    "exclusions": {"process_names": [], "window_title_words": []},
+                },
                 "logging": {"path": "events.jsonl"},
             }
         ),

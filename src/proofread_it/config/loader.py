@@ -9,6 +9,7 @@ from proofread_it.config.schemas import (
     ApiSettings,
     ContextField,
     ContextSettings,
+    ExclusionSettings,
     LoggingSettings,
     Profile,
     Settings,
@@ -75,7 +76,24 @@ def load_settings(path: Path) -> Settings:
     context_payload = payload.get("context")
     if not isinstance(context_payload, dict):
         raise ConfigurationError("settings.context must be an object")
+    _require_exact_keys(context_payload, {"fields", "exclusions"}, "settings.context")
     context_fields = _load_context_fields(context_payload.get("fields"), "settings.context.fields")
+    exclusions_payload = context_payload.get("exclusions")
+    if not isinstance(exclusions_payload, dict):
+        raise ConfigurationError("settings.context.exclusions must be an object")
+    _require_exact_keys(
+        exclusions_payload,
+        {"process_names", "window_title_words"},
+        "settings.context.exclusions",
+    )
+    process_names = _load_unique_strings(
+        exclusions_payload.get("process_names"),
+        "settings.context.exclusions.process_names",
+    )
+    window_title_words = _load_unique_strings(
+        exclusions_payload.get("window_title_words"),
+        "settings.context.exclusions.window_title_words",
+    )
 
     logging_payload = payload.get("logging")
     if not isinstance(logging_payload, dict):
@@ -99,7 +117,13 @@ def load_settings(path: Path) -> Settings:
             retry_count=retry_count,
         ),
         default_profile=default_profile,
-        context=ContextSettings(fields=context_fields),
+        context=ContextSettings(
+            fields=context_fields,
+            exclusions=ExclusionSettings(
+                process_names=process_names,
+                window_title_words=window_title_words,
+            ),
+        ),
         logging=LoggingSettings(path=log_path.resolve()),
     )
 
@@ -191,3 +215,21 @@ def _load_integer(value: object, field_path: str, *, minimum: int) -> int:
         qualifier = "a positive integer" if minimum == 1 else "a non-negative integer"
         raise ConfigurationError(f"{field_path} must be {qualifier}")
     return value
+
+
+def _load_unique_strings(value: object, field_path: str) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        raise ConfigurationError(f"{field_path} must be an array")
+
+    entries: list[str] = []
+    seen: set[str] = set()
+    for index, entry in enumerate(value):
+        item_path = f"{field_path}[{index}]"
+        if not isinstance(entry, str) or not entry or entry.strip() != entry:
+            raise ConfigurationError(f"{item_path} must be a non-empty string")
+        normalized = entry.casefold()
+        if normalized in seen:
+            raise ConfigurationError(f"{item_path} duplicates exclusion {entry!r}")
+        seen.add(normalized)
+        entries.append(entry)
+    return tuple(entries)

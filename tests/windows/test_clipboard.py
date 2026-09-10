@@ -25,6 +25,26 @@ def test_backend_runs_only_with_non_empty_text_outside_the_command_line() -> Non
     assert "selectedText" not in script[script.index("command := Format(") : backend_run]
 
 
+def test_blocked_source_returns_before_clipboard_capture() -> None:
+    script = Path("automation/windows/proofread-it.ahk").read_text(encoding="utf-8")
+
+    blocked_guard = script.index("policyProcess.ExitCode != 0")
+    blocked_return = script.index("return", blocked_guard)
+    clipboard_capture = script.index("selectedText := CaptureSelectedText()")
+
+    assert blocked_guard < blocked_return < clipboard_capture
+
+
+def test_changed_active_window_returns_before_clipboard_capture() -> None:
+    script = Path("automation/windows/proofread-it.ahk").read_text(encoding="utf-8")
+
+    stability_guard = script.index("currentWindow != activeWindow")
+    retry_message = script.index("The active window changed")
+    clipboard_capture = script.index("selectedText := CaptureSelectedText()")
+
+    assert stability_guard < retry_message < clipboard_capture
+
+
 def test_copy_final_uses_only_successful_backend_stdout() -> None:
     script = Path("automation/windows/proofread-it.ahk").read_text(encoding="utf-8")
 

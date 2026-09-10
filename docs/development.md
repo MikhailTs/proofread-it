@@ -30,6 +30,15 @@ automation can also be started directly or loaded from an existing AutoHotkey v2
 
 Each hotkey preserves the current clipboard, copies the selected text with the active application's
 standard copy command, restores the clipboard, and passes non-empty text to the Python backend.
+Before touching the clipboard, it checks the editable exclusion lists in `config/settings.json`.
+`context.exclusions.process_names` contains exact executable basenames, while
+`context.exclusions.window_title_words` contains whole words to match in window titles; both checks
+ignore case. The shipped lists block `KeePass.exe` and any window title containing the word
+`password`. Add, remove, or edit list entries to customize the blocked sources.
+A blocked action shows a notification, logs the observed source and matched rule, and does not copy
+the selection, read the API credential, or start the API backend.
+If the active window, process, or title changes during the check, the action stops and asks the user
+to select the text and try again.
 The backend loads the selected profile, builds one stateless strict-schema request, calls the OpenAI
 Responses API, validates the returned corrections and final text, and performs the selected action.
 If copying does not produce text within one second, the backend is not started and a concise error is

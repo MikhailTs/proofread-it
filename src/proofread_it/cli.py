@@ -11,6 +11,7 @@ from proofread_it.errors import MalformedResponseError, ProviderError
 from proofread_it.presentation.result_window import show_result
 from proofread_it.providers.credentials import CredentialError, read_api_key_from_environment
 from proofread_it.providers.openai import OpenAIProvider
+from proofread_it.source_check import BLOCKED_EXIT_CODE, blocked_message, check_current_source
 from proofread_it.workflow import run_workflow
 
 _SOURCE_PROCESS_NAME = "PROOFREAD_IT_SOURCE_PROCESS_NAME"
@@ -31,6 +32,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     options = _parser().parse_args(argv)
     try:
         settings = load_settings(options.settings)
+        exclusion = check_current_source(
+            settings,
+            profile=options.profile,
+            action=options.action,
+        )
+        if exclusion is not None:
+            print(blocked_message(exclusion), file=sys.stderr)
+            return BLOCKED_EXIT_CODE
         profile = load_profile(options.settings.with_name("profiles.json"), options.profile)
         api_key = read_api_key_from_environment(settings.api.api_key_env)
         result = run_workflow(

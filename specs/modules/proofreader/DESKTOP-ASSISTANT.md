@@ -5,7 +5,7 @@
 - Approval authority: `Project owner`
 - Supersedes: `NONE`
 - Superseded by: `NONE`
-- Updated: `2026-09-09`
+- Updated: `2026-09-10`
 
 ## Contract Summary {#summary}
 
@@ -110,9 +110,11 @@ MVP hotkey bindings and their profile/action routing MUST be configured in the A
 
 For schema version `1`, `settings.api` MUST contain exactly `model`, `api_key_env`, `timeout_seconds`, `max_output_tokens`, and `retry_count`. `model` and `api_key_env` MUST be non-empty strings; `timeout_seconds` and `max_output_tokens` MUST be positive integers; and `retry_count` MUST be a non-negative integer. The shipped MVP values MUST be `gpt-5.6-luna`, `OPENAI_API_KEY`, `30`, `2048`, and `2`, respectively. The MVP MUST apply the fixed configured output-token limit to every request. Computing a dynamic output-token limit from the selected-text length is deferred until after MVP.
 
+For schema version `1`, `settings.context` MUST contain exactly `fields` and `exclusions`. `exclusions` MUST contain exactly `process_names` and `window_title_words`, each an array of unique, non-empty strings. Process-name entries are matched case-insensitively against the executable basename; window-title entries are matched case-insensitively as whole words. The shipped configuration MUST initially contain `KeePass.exe` in `process_names` and `password` in `window_title_words`. Users MAY add, remove, or edit entries in either list without changing source code.
+
 **Rationale:** Separating operation from language policy keeps configuration understandable and prevents profile selection from changing technical permissions.
 
-**Verification:** Configuration-schema tests load the shipped `proofread` profile, accept supported minimal examples without hotkey settings, reject unsupported versions, missing or unknown profile fields, duplicate or unsupported context-field names, and invalid cross-boundary fields, and identify the failing field in the user-facing configuration error. Static or Windows automation tests verify that the AHK binding declarations route explicit profile/action pairs without Python source changes.
+**Verification:** Configuration-schema tests load the shipped `proofread` profile and exclusion lists, accept supported examples without hotkey settings, reject unsupported versions, missing or unknown profile or context fields, duplicate or invalid context and exclusion entries, and invalid cross-boundary fields, and identify the failing field in the user-facing configuration error. Static or Windows automation tests verify that the AHK binding declarations route explicit profile/action pairs without Python source changes.
 
 **Alternatives:** A single combined configuration file and profile-specific code paths were rejected because they blur authority and increase duplication. Runtime hotkey routing in `settings.json` is deferred beyond the MVP because editing the AutoHotkey bindings is sufficient for the intended user.
 
@@ -172,13 +174,15 @@ The profile MUST express editing policy declaratively rather than require a sepa
 
 **Normative:** At hotkey time, the automation layer MUST obtain the active process identity and active-window title locally, normalize them into an optional structured source object, and evaluate configured application and title-pattern exclusions before copying selected text. If an exclusion matches, the application MUST NOT capture or transmit the selected text, MUST NOT call the LLM API, and MUST notify the user that processing is blocked for the active source.
 
+The schema-version-1 exclusion lists and matching rules are defined by `spec://proofreader/DESKTOP-ASSISTANT#configuration`. When more than one rule matches, the first matching process-name rule takes precedence over title-word rules, and otherwise list order determines the reported match. Missing process or title values do not match. A blocked invocation MUST use the existing local logging boundary and MUST NOT read or require the API credential.
+
 For an allowed source, `settings.json` defines the maximum context fields the application may collect, and the selected profile defines the subset that may be transmitted. The intersection of those policies is the only source context included in the logical request. The MVP context fields are friendly application name, process name, and active-window title. Missing or unusable values MUST be represented as `null` or omitted and MUST NOT fail the request.
 
 The application MUST NOT automatically collect or send whole webpages, URLs, chat histories, HTML, unrelated UI text, clipboard history, arbitrary surrounding screen content, or deeper application metadata. A data-driven mapping SHOULD convert known executable names such as `firefox.exe`, `Discord.exe`, and `Telegram.exe` to friendly names, with deterministic fallback for unknown applications.
 
 **Rationale:** Small explicit metadata can improve register selection while reducing unnecessary disclosure; fail-closed exclusions prevent requests from sensitive applications.
 
-**Verification:** Unit tests cover known and unknown process mapping, empty titles, global/profile policy intersection, application exclusions, title-pattern exclusions, and proof that blocked invocations never invoke clipboard capture or the API fake.
+**Verification:** Unit tests cover known and unknown process mapping, empty titles, global/profile policy intersection, case-insensitive executable-basename exclusions, case-insensitive whole-word title exclusions and their non-matches, and deterministic rule precedence. Component and Windows-boundary tests prove that a blocked invocation is logged without source text, does not read a credential, and never invokes clipboard capture or the API backend.
 
 **Alternatives:** Sending selected text without metadata from excluded applications was explicitly rejected; broad screen scraping and implicit context collection were rejected as disproportionate and fragile.
 
@@ -442,3 +446,5 @@ Windows Credential Manager integration MUST be the first post-MVP implementation
   `hotkeys configured through settings.json, additional profiles merely optional, and direct-launch-only AHK behavior unspecified -> hotkeys configured by editing AHK bindings, named casual/professional and similar profiles explicitly outside MVP, and equivalent direct and #Include automation behavior required with repository-relative path resolution`; reason: `match the accepted personal AutoHotkey workflow and keep the MVP profile surface minimal`; invalidates: `previous semantic verification for the affected anchors, AutoHotkey path/bootstrap behavior, automation tests, Windows acceptance documentation, and the MVP release checklist`; review: `NONE`.
 - 2026-09-09 — Project owner — `spec://proofreader/DESKTOP-ASSISTANT#api-access`, `spec://proofreader/DESKTOP-ASSISTANT#testability`, `spec://proofreader/DESKTOP-ASSISTANT#mvp-scope`:
   `development launcher injects the API key into the long-lived AutoHotkey application process tree -> a short-lived per-invocation wrapper injects the key only into the selected Python backend process tree, while the AutoHotkey automation and any external host never receive it`; reason: `prevent a long-lived personal AutoHotkey host and its unrelated child processes from inheriting the API credential`; invalidates: `credential launcher and wrapper implementation, AutoHotkey backend invocation, credential-scope tests, development and Windows acceptance documentation, and prior credential-related manual acceptance`; review: `NONE`.
+- 2026-09-10 — Project owner — `spec://proofreader/DESKTOP-ASSISTANT#configuration`, `spec://proofreader/DESKTOP-ASSISTANT#context-policy`:
+  `configured exclusions with unspecified schema, matching rules, and shipped values -> editable process-name and window-title-word lists with deterministic case-insensitive matching, initially containing KeePass.exe and password, enforced before clipboard capture without credential access`; reason: `provide an immediately useful privacy denylist that remains user-configurable`; invalidates: `settings schema and shipped configuration, context-policy implementation, AutoHotkey invocation order, blocked-event logging, configuration and Windows-boundary tests, and customization documentation`; review: `NONE`.

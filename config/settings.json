@@ -13,7 +13,15 @@
       "application_name",
       "process_name",
       "window_title"
-    ]
+    ],
+    "exclusions": {
+      "process_names": [
+        "KeePass.exe"
+      ],
+      "window_title_words": [
+        "password"
+      ]
+    }
   },
   "logging": {
     "path": "../logs/proofread-it.jsonl"

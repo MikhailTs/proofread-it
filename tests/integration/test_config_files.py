@@ -16,6 +16,8 @@ def test_shipped_default_profile_loads_with_the_accepted_contract() -> None:
     assert settings.api.timeout_seconds == 30
     assert settings.api.max_output_tokens == 2048
     assert settings.api.retry_count == 2
+    assert settings.context.exclusions.process_names == ("KeePass.exe",)
+    assert settings.context.exclusions.window_title_words == ("password",)
     assert profile.name == "proofread"
     assert profile.task == "proofread_english"
     assert profile.context_fields == (

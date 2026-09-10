@@ -12,6 +12,7 @@ def test_default_hotkeys_route_profile_and_action_to_backend() -> None:
     assert "powershell.exe -NoProfile -NonInteractive" in script
     assert "PROOFREAD_IT_SOURCE_PROCESS_NAME" in script
     assert "PROOFREAD_IT_SOURCE_WINDOW_TITLE" in script
+    assert "python -m proofread_it.source_check" in script
 
 
 def test_repository_paths_are_relative_to_the_automation_file() -> None:
@@ -41,3 +42,14 @@ def test_automation_never_reads_or_receives_the_api_credential() -> None:
     assert "openai_token.txt" not in script
     assert "OPENAI_API_KEY" not in script
     assert "scripts\\invoke.ps1" in script
+
+
+def test_source_exclusions_are_checked_before_clipboard_capture_and_backend_invocation() -> None:
+    script = Path("automation/windows/proofread-it.ahk").read_text(encoding="utf-8")
+
+    policy_run = script.index('.Exec(policyCommand)')
+    blocked_guard = script.index("policyProcess.ExitCode != 0")
+    clipboard_capture = script.index("selectedText := CaptureSelectedText()")
+    backend_run = script.index('.Exec(command)')
+
+    assert policy_run < blocked_guard < clipboard_capture < backend_run

@@ -24,7 +24,13 @@ def _settings_payload(log_path: str) -> dict[str, object]:
             "retry_count": 2,
         },
         "default_profile": "proofread",
-        "context": {"fields": ["application_name", "window_title"]},
+        "context": {
+            "fields": ["application_name", "window_title"],
+            "exclusions": {
+                "process_names": ["KeePass.exe"],
+                "window_title_words": ["password"],
+            },
+        },
         "logging": {"path": log_path},
     }
 
@@ -111,6 +117,44 @@ def test_unknown_api_setting_is_rejected(tmp_path: Path) -> None:
     settings_path.write_text(json.dumps(payload), encoding="utf-8")
 
     with pytest.raises(ConfigurationError, match=r"settings\.api\.temperature"):
+        load_settings(settings_path)
+
+
+def test_loads_configurable_source_exclusions(tmp_path: Path) -> None:
+    settings_path = tmp_path / "settings.json"
+    settings_path.write_text(json.dumps(_settings_payload("events.jsonl")), encoding="utf-8")
+
+    settings = load_settings(settings_path)
+
+    assert settings.context.exclusions.process_names == ("KeePass.exe",)
+    assert settings.context.exclusions.window_title_words == ("password",)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("process_names", "KeePass.exe"),
+        ("process_names", [""]),
+        ("process_names", ["KeePass.exe", "keepass.EXE"]),
+        ("window_title_words", [" password"]),
+        ("window_title_words", ["password", "PASSWORD"]),
+    ],
+)
+def test_invalid_exclusions_identify_the_failing_field(
+    tmp_path: Path,
+    field: str,
+    value: object,
+) -> None:
+    settings_path = tmp_path / "settings.json"
+    payload = _settings_payload("events.jsonl")
+    context = payload["context"]
+    assert isinstance(context, dict)
+    exclusions = context["exclusions"]
+    assert isinstance(exclusions, dict)
+    exclusions[field] = value
+    settings_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ConfigurationError, match=rf"settings\.context\.exclusions\.{field}"):
         load_settings(settings_path)
 
 

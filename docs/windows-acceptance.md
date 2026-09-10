@@ -33,6 +33,21 @@ clipboard content from before invocation must be restored. The second event must
 `copy_final`, its exact selection, successful API diagnostics, and the normalized result; after that
 invocation, the clipboard must contain only its normalized `final_text`.
 
+## Source exclusions
+
+1. Copy a recognizable clipboard sentinel and note the current end of `logs/proofread-it.jsonl`.
+2. Open a scratch editor with `password` as a separate word in its window title, select text, and
+   press either proofreading hotkey.
+3. Confirm the blocked-action notification appears, the clipboard sentinel remains unchanged, and
+   exactly one `invocation_blocked` event is appended with a `window_title_word` match and no source
+   text, logical request, API data, or response.
+4. If KeePass is installed, repeat in `KeePass.exe` and confirm the event reports a `process_name`
+   match for `KeePass.exe` with the same no-capture and no-API behavior.
+
+These checks do not make a billable API request and do not require the development credential file.
+Changing the lists under `context.exclusions` in `config/settings.json` must change the blocked
+sources after the file is saved, without an AutoHotkey source change.
+
 ## `#Include` compatibility
 
 1. Stop the directly launched automation.

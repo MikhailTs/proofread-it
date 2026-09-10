@@ -1,44 +1,44 @@
-Updated: 2026-09-09T21:39:32Z
+Updated: 2026-09-10T18:31:15Z
 
 - WAL-Schema: `1`
-- Checkpoint-ID: `aa479fd2-b415-43bd-9218-7ba107904d67`
-- Task: Narrow API credential scope so the AutoHotkey process never receives the key, then complete `#Include` support.
-- Active scope: The specification correction is isolated in commit `0309c60`. Credential-free AHK startup, per-invocation backend credential delivery, include-relative paths, derived tests/docs, and automated verification are complete; create the separate implementation commit. Manual Windows acceptance remains; push is out of scope.
-- Authority: Project owner decisions in the current conversation on 2026-09-09, including approval of the per-invocation boundary and instruction to commit specification changes separately.
-- Authoritative spec: `spec://proofreader/DESKTOP-ASSISTANT#api-access`, `spec://proofreader/DESKTOP-ASSISTANT#testability`, and `spec://proofreader/DESKTOP-ASSISTANT#mvp-scope`; file SHA-256 `12897ef9d39baa614852d187d71348eebb857ceb84bbcaa918a377a4bf063574` in commit `0309c60cd023e83982e2f52228bc3ef508d4a222`.
+- Checkpoint-ID: `43c7e05c-40ea-4ab9-9dd0-291c4a5b31f9`
+- Task: Add configurable source exclusions with initial KeePass and password-title rules.
+- Active scope: The authorized exclusion-list contract, implementation, documentation, automated verification, and required manual acceptance are complete. The `KeePass.exe` manual path is explicitly deferred; create the requested local commit. Push is out of scope.
+- Authority: Project owner request in the current conversation on 2026-09-10 to initially block `KeePass.exe` and windows whose title contains the word `password`, with both lists editable through settings; Project owner confirmation that the password-title manual test passed, instruction to skip the `KeePass.exe` manual check for now, and explicit request to commit these changes.
+- Authoritative spec: `spec://proofreader/DESKTOP-ASSISTANT#configuration`, `spec://proofreader/DESKTOP-ASSISTANT#context-policy`, `spec://proofreader/DESKTOP-ASSISTANT#logging`, and `spec://proofreader/DESKTOP-ASSISTANT#mvp-scope`; authorized post-change file SHA-256 `0bd561e289f1f83455b7ce52eb47d898ba9ead7eece172a19fb51cf59c04f98b`.
 - Issue: `NONE`
 - Assignment: `NONE`
 - Phase: `IN_PROGRESS`
 
 ## Constraints
 
-- The long-lived AutoHotkey automation or external host MUST NOT receive the API credential in its environment -> `spec://proofreader/DESKTOP-ASSISTANT#api-access`.
-- The short-lived per-invocation wrapper reads `$env:USERPROFILE\.secrets\openai_token.txt` and injects the configured environment variable only into one backend invocation tree -> `spec://proofreader/DESKTOP-ASSISTANT#api-access`.
-- Direct AHK launch and `#Include` MUST both work without a credential-bearing automation launcher -> approved architecture and API-access anchors.
-- Implementation must be committed separately from `0309c60`; do not push -> current Project owner request.
-- Preserve unrelated changes and use `uv` -> `AGENTS.md`.
+- Exclusion decisions occur before selection capture and cause zero API transmission -> `spec://proofreader/DESKTOP-ASSISTANT#context-policy`.
+- Blocked invocations log observed source identity and the matched rule, with no source text, request, or response -> `spec://proofreader/DESKTOP-ASSISTANT#logging`.
+- The initial editable configuration blocks exact process basename `KeePass.exe` and the whole word `password` in a window title, both case-insensitively -> current Project owner request; exact matching semantics are the smallest conservative interpretation of "process" and "word".
+- Direct AHK execution and `#Include` operation must retain equivalent behavior without exposing the API credential -> `spec://proofreader/DESKTOP-ASSISTANT#architecture` and `spec://proofreader/DESKTOP-ASSISTANT#api-access`.
+- Preserve unrelated changes, use `uv`, and do not commit or push -> `AGENTS.md` and current request boundary.
 
 ## Checkpoint and evidence basis
 
-- Repository/worktree/branch: `%USERPROFILE%/workspace/proofread-it`; `main`; HEAD `0309c60cd023e83982e2f52228bc3ef508d4a222`; observed `origin/main` `1c37b1e77f31c4a35ce9faf326339618a8371833`; no merge or rebase observed.
-- Staged state is clean. Expected unstaged/untracked implementation paths excluding ACTIVE_WAL: `automation/windows/proofread-it.ahk`, `docs/development.md`, `docs/windows-acceptance.md`, `scripts/invoke.ps1`, `scripts/start.ps1`, `tests/component/test_app_invocation_wrapper.py`, `tests/component/test_app_launcher.py`, and `tests/windows/test_hotkeys.py`.
-- Sorted implementation `path=SHA-256` manifest: `eaf01db0599a415cd93036cc119172173ab1e11c49d39f60883713c5690cca55`; retained pre-replacement WAL SHA-256 `c847b2b55e73e5ff29c21de2e38fa3ba781d55b22f6b7981cbaceab1f0ede369`.
+- Repository/worktree/branch: `%USERPROFILE%/workspace/proofread-it`; `main`; HEAD and observed `origin/main` `aaac5d52c9cd3b8a5b0303e5a6bf5ce61efe5acd`; no merge or rebase observed.
+- Staged and non-ignored untracked state are clean. Before this replacement, the only unstaged path was the completed prior task checkpoint `specs/WAL.md`; retained prior WAL SHA-256 `52f2a2c9cbb8a2b3589938a827ddcc236e966a5b4bd3beac280cf9d8cf52fb71`.
+- Expected changed paths excluding ACTIVE_WAL: 20 paths comprising `automation/windows/proofread-it.ahk`, `config/settings.json`, `docs/development.md`, `docs/windows-acceptance.md`, the addressed specification, six source files, and nine test files. Sorted `path=SHA-256` manifest hash: `21cfa1fd62e881c0bf448ade793aecc395a091b58a724255c92d6ccd32c65be1`; authoritative spec hash remains `0bd561e289f1f83455b7ce52eb47d898ba9ead7eece172a19fb51cf59c04f98b`.
 
 ## Boundaries
 
-- Specs: Approved correction complete and separately committed as `0309c60 docs(spec): narrow API credential scope` with only the spec and its checkpoint WAL.
-- Code: `scripts/start.ps1` starts AutoHotkey without reading or injecting the key; new `scripts/invoke.ps1` reads and injects it only for one short-lived backend invocation; AHK routes through that wrapper and resolves repository paths from `A_LineFile`.
-- Tests: Sentinel integration coverage proves the simulated AHK host and unrelated child see no key, the selected fake backend sees it, unusable secret files prevent backend launch, and the sentinel is absent from arguments/output. Static contracts cover wrapper routing and absence of credential handling in AHK/startup.
-- Documentation: Development and Windows acceptance instructions describe credential-free direct/include startup, per-invocation delivery, real billable calls, and correct clipboard outcomes.
-- Verification on manifest `eaf01db0599a415cd93036cc119172173ab1e11c49d39f60883713c5690cca55`: `uv run --no-sync pytest -q tests/component/test_app_launcher.py tests/component/test_app_invocation_wrapper.py tests/windows/test_hotkeys.py` -> `13 passed`; direct AutoHotkey `/ErrorStdOut /Validate` -> exit `0`; disposable external include host checking settings/wrapper paths -> exit `0` and host removed; `uv run --no-sync pytest -q` -> `90 passed, 2 deselected`; `uv run --no-sync ruff check .` -> passed; `uv run --no-sync mypy src` -> passed for 25 source files; `git diff --check` -> exit `0` with line-ending warnings only.
-- Human acceptance: Outstanding direct and external-include hotkey workflow using the real development credential; automated verification did not read it or make a billable request.
-- Risk / REVIEW: The wrapper temporarily holds the key only in its short-lived process environment while invoking `uv`/Python and restores the previous value afterward. Interactive Windows behavior remains a human gate; no semantic decision is pending.
+- Specs: The approved configuration and context-policy anchors now define editable process-name and window-title-word lists, deterministic matching and precedence, initial values, pre-capture enforcement, blocked logging, and credential independence. `git diff --check -- specs/modules/proofreader/DESKTOP-ASSISTANT.md` -> exit `0` with line-ending warning only at 2026-09-10T15:22:03Z.
+- Code: Shipped settings contain `KeePass.exe` and `password`; typed loading validates both editable lists; the pure matcher implements deterministic case-insensitive basename and whole-word rules; a credential-free source check logs blocked invocations; AHK runs it before capture and aborts if the observed active window changes; the main CLI checks again before credential/provider construction.
+- Tests: Unit and component coverage exercises configuration errors, matching/non-matching/precedence, blocked log shape, absence of source text, credential independence, API-provider non-construction, and AHK ordering/window-stability guards. The first full run exposed one legacy live-wrapper fixture missing the now-required exclusions object; that fixture was updated and the repeated full run passed.
+- Documentation: Development customization and manual Windows source-exclusion acceptance are documented.
+- Verification on manifest `21cfa1fd62e881c0bf448ade793aecc395a091b58a724255c92d6ccd32c65be1`: `uv run --no-sync pytest -q` -> `112 passed, 2 deselected`; `uv run --no-sync ruff check .` -> passed; `uv run --no-sync mypy src` -> passed for 26 source files; AutoHotkey v2 `/ErrorStdOut /Validate automation/windows/proofread-it.ahk` -> exit `0`; `git diff --check` -> exit `0` with line-ending warnings only; exact anchor search found one `#configuration` and one `#context-policy` anchor.
+- Human acceptance: Project owner confirmed on 2026-09-10 that the password-title rule passed manual Windows testing and explicitly deferred the `KeePass.exe` process-name manual path. Configurability and process-name behavior remain covered by automated tests.
+- Risk / REVIEW: The `KeePass.exe` path is not manually exercised, by explicit Project owner deferral. The separate preflight adds startup latency and an unavoidable narrow focus-change boundary; explicit window/process/title stability checks fail closed before capture, and the backend rechecks the original metadata before credential or provider creation. No semantic REVIEW is open.
 
 ## Next action
 
-- Action: Stage only the implementation/docs/tests and WAL, inspect the staged diff, and create the separate implementation commit.
-- First command: `git add -- automation/windows/proofread-it.ahk docs/development.md docs/windows-acceptance.md scripts/invoke.ps1 scripts/start.ps1 specs/WAL.md tests/component/test_app_invocation_wrapper.py tests/component/test_app_launcher.py tests/windows/test_hotkeys.py`.
-- Completion criterion: commit `fix(windows): isolate API credential from AHK host` contains no specification change, all post-commit paths are recorded, and manual acceptance remains explicitly pending.
+- Action: Stage exactly the 20 task paths plus ACTIVE_WAL, inspect the staged diff, and create the proposed spec-addressed commit.
+- First command: `git add --` with the explicit task path list.
+- Completion criterion: One local commit contains only this source-exclusion task, its specification and checkpoint; the post-commit worktree is clean and push remains unperformed.
 
 - Blockers: `NONE`
 - Pending decisions: `NONE`

@@ -19,10 +19,19 @@ class ApiSettings:
 
 
 @dataclass(frozen=True, slots=True)
+class ExclusionSettings:
+    """Configured source rules that prevent capture and transmission."""
+
+    process_names: tuple[str, ...] = ()
+    window_title_words: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class ContextSettings:
     """Maximum source-context fields that may enter a request."""
 
     fields: tuple[ContextField, ...]
+    exclusions: ExclusionSettings = ExclusionSettings()
 
 
 @dataclass(frozen=True, slots=True)

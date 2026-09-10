@@ -5,6 +5,7 @@ from pathlib import PureWindowsPath
 _FRIENDLY_APPLICATIONS = {
     "discord.exe": "Discord",
     "firefox.exe": "Firefox",
+    "keepass.exe": "KeePass",
     "telegram.exe": "Telegram",
 }
 
