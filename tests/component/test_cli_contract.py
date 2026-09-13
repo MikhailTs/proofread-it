@@ -76,7 +76,7 @@ def _write_config(tmp_path: Path) -> Path:
 def _connect_fake_provider(monkeypatch: MonkeyPatch, provider: _FakeProvider) -> None:
     monkeypatch.setattr(
         "proofread_it.cli.OpenAIProvider",
-        lambda _settings, api_key: provider if api_key == _SENTINEL_KEY else None,
+        lambda _settings, api_key, **_kwargs: provider if api_key == _SENTINEL_KEY else None,
     )
 
 
@@ -123,6 +123,7 @@ def test_cli_sends_captured_text_and_shows_the_validated_result(
     ]
     assert event["event"] == "invocation_completed"
     assert event["raw_response"] == {"id": "resp_cli", "status": "completed"}
+    assert event["retry_events"] == []
     assert _SENTINEL_KEY not in (tmp_path / "events.jsonl").read_text(encoding="utf-8")
 
 

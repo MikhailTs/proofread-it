@@ -35,6 +35,7 @@ from proofread_it.errors import (
     UnsupportedModelError,
 )
 from proofread_it.models import LogicalRequest
+from proofread_it.providers.base import RetryEvent
 from proofread_it.providers.openai import OpenAIProvider
 
 _SENTINEL_KEY = "provider-sentinel-key-must-not-appear"
@@ -124,6 +125,10 @@ def _factory_for(
     constructor_calls: list[dict[str, object]],
 ) -> Callable[..., object]:
     def factory(**kwargs: object) -> object:
+        http_client = kwargs.pop("http_client")
+        close = getattr(http_client, "close", None)
+        if callable(close):
+            close()
         constructor_calls.append(kwargs)
         return client
 
@@ -255,9 +260,10 @@ def test_rejects_an_invalid_logical_envelope_before_calling_the_sdk() -> None:
     assert client.responses.calls == []
 
 
-def test_configured_sdk_retry_count_limits_real_transport_attempts() -> None:
+def test_configured_sdk_retries_are_reported_with_the_previous_http_status() -> None:
     attempts = 0
     created_clients: list[OpenAI] = []
+    retry_events: list[RetryEvent] = []
 
     def handler(request: httpx2.Request) -> httpx2.Response:
         nonlocal attempts
@@ -281,15 +287,20 @@ def test_configured_sdk_retry_count_limits_real_transport_attempts() -> None:
             timeout=float(kwargs["timeout"]),
             max_retries=int(kwargs["max_retries"]),
             base_url="https://api.openai.test/v1/",
-            http_client=httpx2.Client(transport=httpx2.MockTransport(handler)),
+            http_client=kwargs["http_client"],  # type: ignore[arg-type]
         )
         created_clients.append(client)
         return client
+
+    def http_client_factory(**kwargs: object) -> object:
+        return httpx2.Client(transport=httpx2.MockTransport(handler), **kwargs)
 
     provider = OpenAIProvider(
         _settings(retry_count=2),
         _SENTINEL_KEY,
         client_factory=client_factory,
+        http_client_factory=http_client_factory,
+        retry_event_sink=retry_events.append,
     )
 
     try:
@@ -300,3 +311,60 @@ def test_configured_sdk_retry_count_limits_real_transport_attempts() -> None:
             client.close()
 
     assert attempts == 3
+    assert retry_events == [
+        {"retry_number": 1, "trigger": "http_status", "status_code": 500},
+        {"retry_number": 2, "trigger": "http_status", "status_code": 500},
+    ]
+
+
+def test_transport_retry_is_reported_without_request_or_header_data() -> None:
+    attempts = 0
+    created_clients: list[OpenAI] = []
+    retry_events: list[RetryEvent] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise httpx2.ConnectError("sentinel transport detail", request=request)
+        return httpx2.Response(
+            400,
+            request=request,
+            json={"error": {"message": "stop", "type": "invalid_request_error"}},
+        )
+
+    def client_factory(**kwargs: object) -> object:
+        client = OpenAI(
+            api_key=str(kwargs["api_key"]),
+            timeout=float(kwargs["timeout"]),
+            max_retries=int(kwargs["max_retries"]),
+            base_url="https://api.openai.test/v1/",
+            http_client=kwargs["http_client"],  # type: ignore[arg-type]
+        )
+        created_clients.append(client)
+        return client
+
+    def http_client_factory(**kwargs: object) -> object:
+        return httpx2.Client(transport=httpx2.MockTransport(handler), **kwargs)
+
+    provider = OpenAIProvider(
+        _settings(retry_count=1),
+        _SENTINEL_KEY,
+        client_factory=client_factory,
+        http_client_factory=http_client_factory,
+        retry_event_sink=retry_events.append,
+    )
+
+    try:
+        with pytest.raises(ProviderRequestError):
+            provider.send(_request())
+    finally:
+        for client in created_clients:
+            client.close()
+
+    assert attempts == 2
+    assert retry_events == [
+        {"retry_number": 1, "trigger": "transport_error", "status_code": None}
+    ]
+    assert _SENTINEL_KEY not in repr(retry_events)
+    assert "sentinel transport detail" not in repr(retry_events)

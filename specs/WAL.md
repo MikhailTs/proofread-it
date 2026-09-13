@@ -1,44 +1,44 @@
-Updated: 2026-09-10T18:31:15Z
+Updated: 2026-09-13T17:46:23Z
 
 - WAL-Schema: `1`
-- Checkpoint-ID: `43c7e05c-40ea-4ab9-9dd0-291c4a5b31f9`
-- Task: Add configurable source exclusions with initial KeePass and password-title rules.
-- Active scope: The authorized exclusion-list contract, implementation, documentation, automated verification, and required manual acceptance are complete. The `KeePass.exe` manual path is explicitly deferred; create the requested local commit. Push is out of scope.
-- Authority: Project owner request in the current conversation on 2026-09-10 to initially block `KeePass.exe` and windows whose title contains the word `password`, with both lists editable through settings; Project owner confirmation that the password-title manual test passed, instruction to skip the `KeePass.exe` manual check for now, and explicit request to commit these changes.
-- Authoritative spec: `spec://proofreader/DESKTOP-ASSISTANT#configuration`, `spec://proofreader/DESKTOP-ASSISTANT#context-policy`, `spec://proofreader/DESKTOP-ASSISTANT#logging`, and `spec://proofreader/DESKTOP-ASSISTANT#mvp-scope`; authorized post-change file SHA-256 `0bd561e289f1f83455b7ce52eb47d898ba9ead7eece172a19fb51cf59c04f98b`.
+- Checkpoint-ID: `3a9ec4ed-c278-4710-b73f-46bdf7752b67`
+- Task: Log automatic retry attempts performed by the OpenAI Python SDK.
+- Active scope: Credential-safe structured SDK retry observations, existing invocation-log integration, documentation, and offline automated verification are complete. The Project owner has explicitly requested a local commit of this work. No retry-policy, specification, dependency, unrelated MVP, push, or live-API change is authorized.
+- Authority: Project owner requests in the current conversation on 2026-09-13 to implement logging for OpenAI SDK retries and to prepare the resulting commit.
+- Authoritative spec: `spec://proofreader/DESKTOP-ASSISTANT#api-access`, `spec://proofreader/DESKTOP-ASSISTANT#errors`, `spec://proofreader/DESKTOP-ASSISTANT#logging`, and `spec://proofreader/DESKTOP-ASSISTANT#testability`; observed file SHA-256 `0bd561e289f1f83455b7ce52eb47d898ba9ead7eece172a19fb51cf59c04f98b`.
 - Issue: `NONE`
 - Assignment: `NONE`
 - Phase: `IN_PROGRESS`
 
 ## Constraints
 
-- Exclusion decisions occur before selection capture and cause zero API transmission -> `spec://proofreader/DESKTOP-ASSISTANT#context-policy`.
-- Blocked invocations log observed source identity and the matched rule, with no source text, request, or response -> `spec://proofreader/DESKTOP-ASSISTANT#logging`.
-- The initial editable configuration blocks exact process basename `KeePass.exe` and the whole word `password` in a window title, both case-insensitively -> current Project owner request; exact matching semantics are the smallest conservative interpretation of "process" and "word".
-- Direct AHK execution and `#Include` operation must retain equivalent behavior without exposing the API credential -> `spec://proofreader/DESKTOP-ASSISTANT#architecture` and `spec://proofreader/DESKTOP-ASSISTANT#api-access`.
-- Preserve unrelated changes, use `uv`, and do not commit or push -> `AGENTS.md` and current request boundary.
+- Keep the official SDK's configured bounded retry mechanism; do not replace it with application retries -> `spec://proofreader/DESKTOP-ASSISTANT#errors`.
+- Log observed retry attempts without request bodies, authorization headers, API keys, or unrelated environment data -> `spec://proofreader/DESKTOP-ASSISTANT#api-access` and `spec://proofreader/DESKTOP-ASSISTANT#logging`.
+- Use public HTTP transport hooks supported by installed `openai==3.8.0`; do not subclass or call private SDK retry methods -> Project owner discussion and smallest stable implementation choice.
+- Default verification remains offline and credential-free -> `spec://proofreader/DESKTOP-ASSISTANT#testability`.
+- Preserve unrelated changes, use `uv`, commit only the task paths, and do not push -> `AGENTS.md` and current request boundary.
 
 ## Checkpoint and evidence basis
 
-- Repository/worktree/branch: `%USERPROFILE%/workspace/proofread-it`; `main`; HEAD and observed `origin/main` `aaac5d52c9cd3b8a5b0303e5a6bf5ce61efe5acd`; no merge or rebase observed.
-- Staged and non-ignored untracked state are clean. Before this replacement, the only unstaged path was the completed prior task checkpoint `specs/WAL.md`; retained prior WAL SHA-256 `52f2a2c9cbb8a2b3589938a827ddcc236e966a5b4bd3beac280cf9d8cf52fb71`.
-- Expected changed paths excluding ACTIVE_WAL: 20 paths comprising `automation/windows/proofread-it.ahk`, `config/settings.json`, `docs/development.md`, `docs/windows-acceptance.md`, the addressed specification, six source files, and nine test files. Sorted `path=SHA-256` manifest hash: `21cfa1fd62e881c0bf448ade793aecc395a091b58a724255c92d6ccd32c65be1`; authoritative spec hash remains `0bd561e289f1f83455b7ce52eb47d898ba9ead7eece172a19fb51cf59c04f98b`.
+- Repository/worktree/branch: `%USERPROFILE%/workspace/proofread-it`; `main`; HEAD `65123be5dba2b4af496ec336534b8fe7a2b27097`; observed `origin/main` `aaac5d52c9cd3b8a5b0303e5a6bf5ce61efe5acd`; no merge or rebase observed.
+- Staged and non-ignored untracked state are clean. Expected unstaged paths excluding ACTIVE_WAL: `docs/development.md`, `src/proofread_it/cli.py`, `src/proofread_it/providers/base.py`, `src/proofread_it/providers/openai.py`, `src/proofread_it/workflow.py`, `tests/component/test_cli_contract.py`, `tests/component/test_workflow.py`, and `tests/unit/test_openai_provider.py`.
+- Dirty implementation/docs/test diff fingerprint excluding ACTIVE_WAL: `e038a9a423a286f2424ee95c2d1a3f7574fa8836`; retained pre-replacement WAL SHA-256 `d7153f213dadc479253ef5299896db6c1d1693cc21077c23d45a77c286675bf4`.
+- Relevant installed dependency: locked and installed `openai==3.8.0`. Official OpenAI documentation confirms SDK automatic retries but does not document a high-level Python retry callback.
 
 ## Boundaries
 
-- Specs: The approved configuration and context-policy anchors now define editable process-name and window-title-word lists, deterministic matching and precedence, initial values, pre-capture enforcement, blocked logging, and credential independence. `git diff --check -- specs/modules/proofreader/DESKTOP-ASSISTANT.md` -> exit `0` with line-ending warning only at 2026-09-10T15:22:03Z.
-- Code: Shipped settings contain `KeePass.exe` and `password`; typed loading validates both editable lists; the pure matcher implements deterministic case-insensitive basename and whole-word rules; a credential-free source check logs blocked invocations; AHK runs it before capture and aborts if the observed active window changes; the main CLI checks again before credential/provider construction.
-- Tests: Unit and component coverage exercises configuration errors, matching/non-matching/precedence, blocked log shape, absence of source text, credential independence, API-provider non-construction, and AHK ordering/window-stability guards. The first full run exposed one legacy live-wrapper fixture missing the now-required exclusions object; that fixture was updated and the repeated full run passed.
-- Documentation: Development customization and manual Windows source-exclusion acceptance are documented.
-- Verification on manifest `21cfa1fd62e881c0bf448ade793aecc395a091b58a724255c92d6ccd32c65be1`: `uv run --no-sync pytest -q` -> `112 passed, 2 deselected`; `uv run --no-sync ruff check .` -> passed; `uv run --no-sync mypy src` -> passed for 26 source files; AutoHotkey v2 `/ErrorStdOut /Validate automation/windows/proofread-it.ahk` -> exit `0`; `git diff --check` -> exit `0` with line-ending warnings only; exact anchor search found one `#configuration` and one `#context-policy` anchor.
-- Human acceptance: Project owner confirmed on 2026-09-10 that the password-title rule passed manual Windows testing and explicitly deferred the `KeePass.exe` process-name manual path. Configurability and process-name behavior remain covered by automated tests.
-- Risk / REVIEW: The `KeePass.exe` path is not manually exercised, by explicit Project owner deferral. The separate preflight adds startup latency and an unavoidable narrow focus-change boundary; explicit window/process/title stability checks fail closed before capture, and the backend rechecks the original metadata before credential or provider creation. No semantic REVIEW is open.
+- Specs: Existing approved behavior already requires SDK-managed bounded retries and retry events in the single invocation log; no semantic spec edit was made.
+- Code: The OpenAI adapter supplies a custom default HTTPX2 client with request/response hooks. A retry is recorded only when the SDK starts an attempt whose `x-stainless-retry-count` is positive. The event contains only one-based `retry_number`, `http_status` or `transport_error`, and nullable prior `status_code`; workflow logging retains the events on success and failure.
+- Tests: Offline SDK transport tests cover two HTTP-triggered retries, a connection-triggered retry, bounded attempt count, successful retry-to-workflow logging, exhausted-retry failure logging, and absence of credential or transport-detail leakage. Existing CLI logs now assert an empty retry list when no retry occurs.
+- Documentation: Development guidance describes `retry_events`, field meaning, and excluded sensitive data.
+- Verification on diff fingerprint `e038a9a423a286f2424ee95c2d1a3f7574fa8836` at 2026-09-13T17:19Z: `uv run --no-sync pytest -q -p no:cacheprovider` -> `116 passed, 2 deselected`; `uv run --no-sync ruff check .` -> passed; `uv run --no-sync mypy src` -> passed for 26 source files; `git diff --check` -> exit `0` with line-ending warnings only.
+- Risk / REVIEW: The retry number is read from the SDK-generated `x-stainless-retry-count` transport header because public hooks do not expose a high-level retry object. The pinned SDK and offline tests make drift visible, but a future SDK transport change may require adapter maintenance. Exact internal backoff duration and rationale remain intentionally outside the event. No semantic REVIEW is open.
 
 ## Next action
 
-- Action: Stage exactly the 20 task paths plus ACTIVE_WAL, inspect the staged diff, and create the proposed spec-addressed commit.
-- First command: `git add --` with the explicit task path list.
-- Completion criterion: One local commit contains only this source-exclusion task, its specification and checkpoint; the post-commit worktree is clean and push remains unperformed.
+- Action: Stage only the listed task paths, inspect the staged diff, and create the explicitly requested local commit with the relevant specification addresses.
+- First command: `git add -- docs/development.md specs/WAL.md src/proofread_it/cli.py src/proofread_it/providers/base.py src/proofread_it/providers/openai.py src/proofread_it/workflow.py tests/component/test_cli_contract.py tests/component/test_workflow.py tests/unit/test_openai_provider.py`.
+- Completion criterion: One local commit contains only the verified task changes and specification references; no push, live API request, or unrelated MVP change occurs.
 
 - Blockers: `NONE`
 - Pending decisions: `NONE`

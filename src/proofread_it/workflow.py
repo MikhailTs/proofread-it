@@ -6,7 +6,7 @@ from time import perf_counter
 from proofread_it.app_logging import log_event
 from proofread_it.config.schemas import Profile, Settings
 from proofread_it.context.normalize import normalize_source_context
-from proofread_it.providers.base import Provider, ProviderResponse
+from proofread_it.providers.base import Provider, ProviderResponse, RetryEvent
 from proofread_it.requests.builder import build_request
 from proofread_it.responses.parser import ProofreadingResult, parse_response
 
@@ -20,6 +20,7 @@ def run_workflow(
     selected_text: str,
     source_process_name: str | None,
     source_window_title: str | None,
+    retry_events: Sequence[RetryEvent] = (),
     sensitive_values: Sequence[str] = (),
 ) -> ProofreadingResult:
     """Build, send, validate, and log one independent proofreading request."""
@@ -46,6 +47,7 @@ def run_workflow(
         "model_output": None,
         "raw_response": None,
         "normalized_result": None,
+        "retry_events": retry_events,
         "error": None,
     }
 

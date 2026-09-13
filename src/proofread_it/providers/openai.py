@@ -11,6 +11,7 @@ from openai import (
     AuthenticationError,
     BadRequestError,
     ConflictError,
+    DefaultHttpx2Client,
     InternalServerError,
     NotFoundError,
     OpenAI,
@@ -39,10 +40,12 @@ from proofread_it.models import (
     LogicalRequest,
     OutputContractPart,
 )
-from proofread_it.providers.base import ProviderResponse
+from proofread_it.providers.base import ProviderResponse, RetryEvent, RetryEventSink
 
 _RESPONSE_FORMAT_NAME = "proofreading_result"
+_SDK_RETRY_COUNT_HEADER = "x-stainless-retry-count"
 type ClientFactory = Callable[..., object]
+type HttpClientFactory = Callable[..., object]
 
 
 class _ResponseError(Protocol):
@@ -76,6 +79,15 @@ class _OpenAIClient(Protocol):
     responses: _ResponsesResource
 
 
+class _HttpRequest(Protocol):
+    @property
+    def headers(self) -> object: ...
+
+
+class _HttpResponse(Protocol):
+    status_code: int
+
+
 class OpenAIProvider:
     """Map provider-neutral requests onto one stateless OpenAI response call."""
 
@@ -85,19 +97,31 @@ class OpenAIProvider:
         api_key: str,
         *,
         client_factory: ClientFactory = OpenAI,
+        http_client_factory: HttpClientFactory = DefaultHttpx2Client,
+        retry_event_sink: RetryEventSink | None = None,
     ) -> None:
         self._settings = settings
+        self._retry_event_sink = retry_event_sink
+        self._previous_status_code: int | None = None
+        http_client = http_client_factory(
+            event_hooks={
+                "request": [self._observe_request],
+                "response": [self._observe_response],
+            }
+        )
         self._client = cast(
             _OpenAIClient,
             client_factory(
                 api_key=api_key,
                 timeout=float(settings.api.timeout_seconds),
                 max_retries=settings.api.retry_count,
+                http_client=http_client,
             ),
         )
 
     def send(self, request: LogicalRequest) -> ProviderResponse:
         """Send exactly one logical request, allowing only SDK-managed retries."""
+        self._previous_status_code = None
         instructions, output_contract, dynamic_input = _request_parts(request)
         response_format: ResponseTextConfigParam = {
             "format": {
@@ -130,6 +154,33 @@ class OpenAIProvider:
             output_text=response.output_text,
             raw_response=response.model_dump(mode="json"),
         )
+
+    def _observe_request(self, request: _HttpRequest) -> None:
+        headers = request.headers
+        get_header = getattr(headers, "get", None)
+        if not callable(get_header):
+            self._previous_status_code = None
+            return
+
+        raw_retry_number = get_header(_SDK_RETRY_COUNT_HEADER)
+        try:
+            retry_number = int(raw_retry_number)
+        except (TypeError, ValueError):
+            self._previous_status_code = None
+            return
+
+        if retry_number > 0 and self._retry_event_sink is not None:
+            status_code = self._previous_status_code
+            event: RetryEvent = {
+                "retry_number": retry_number,
+                "trigger": "http_status" if status_code is not None else "transport_error",
+                "status_code": status_code,
+            }
+            self._retry_event_sink(event)
+        self._previous_status_code = None
+
+    def _observe_response(self, response: _HttpResponse) -> None:
+        self._previous_status_code = response.status_code
 
 
 def _request_parts(

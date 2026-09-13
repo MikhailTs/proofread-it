@@ -1,9 +1,21 @@
 """Small provider-facing API abstraction."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol, TypedDict
 
 from proofread_it.models import LogicalRequest
+
+
+class RetryEvent(TypedDict):
+    """Credential-free observation of one SDK-managed retry attempt."""
+
+    retry_number: int
+    trigger: Literal["http_status", "transport_error"]
+    status_code: int | None
+
+
+type RetryEventSink = Callable[[RetryEvent], None]
 
 
 @dataclass(frozen=True, slots=True)

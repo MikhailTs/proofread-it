@@ -4,7 +4,9 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import httpx2
 import pytest
+from openai import OpenAI
 
 from proofread_it.config.schemas import (
     ApiSettings,
@@ -13,9 +15,14 @@ from proofread_it.config.schemas import (
     Profile,
     Settings,
 )
-from proofread_it.errors import MalformedResponseError, ProviderTimeoutError
+from proofread_it.errors import (
+    MalformedResponseError,
+    ProviderServerError,
+    ProviderTimeoutError,
+)
 from proofread_it.models import LogicalRequest
-from proofread_it.providers.base import ProviderResponse
+from proofread_it.providers.base import ProviderResponse, RetryEvent
+from proofread_it.providers.openai import OpenAIProvider
 from proofread_it.workflow import run_workflow
 
 _SENTINEL_KEY = "workflow-sentinel-key-must-not-appear"
@@ -120,6 +127,7 @@ def test_sends_once_validates_and_logs_the_complete_response(tmp_path: Path) -> 
         "corrections": ["Fix agreement."],
         "final_text": "She goes.",
     }
+    assert event["retry_events"] == []
     assert isinstance(event["request_duration_ms"], float)
     raw_log = log_path.read_text(encoding="utf-8")
     assert _SENTINEL_KEY not in raw_log
@@ -182,3 +190,175 @@ def test_logs_a_credential_safe_provider_failure(tmp_path: Path) -> None:
     assert event["error"]["type"] == "ProviderTimeoutError"
     assert _SENTINEL_KEY not in raw_log
     assert "Bearer [REDACTED]" in raw_log
+
+
+def test_logs_retry_events_observed_during_the_provider_call(tmp_path: Path) -> None:
+    log_path = tmp_path / "events.jsonl"
+    retry_events: list[RetryEvent] = []
+
+    @dataclass
+    class _RetryingProvider:
+        def send(self, request: LogicalRequest) -> ProviderResponse:
+            retry_events.append(
+                {"retry_number": 1, "trigger": "http_status", "status_code": 500}
+            )
+            return ProviderResponse(
+                response_id="resp_retry",
+                model="gpt-5.6-luna",
+                api_status="completed",
+                output_text='{"corrections":[],"final_text":"Text"}',
+                raw_response={"id": "resp_retry"},
+            )
+
+    run_workflow(
+        settings=_settings(log_path),
+        profile=_profile(),
+        provider=_RetryingProvider(),
+        action="show_full",
+        selected_text="Text",
+        source_process_name="editor.exe",
+        source_window_title="Draft",
+        retry_events=retry_events,
+    )
+
+    assert _event(log_path)["retry_events"] == [
+        {"retry_number": 1, "trigger": "http_status", "status_code": 500}
+    ]
+
+
+def test_logs_retry_events_when_the_provider_exhausts_retries(tmp_path: Path) -> None:
+    log_path = tmp_path / "events.jsonl"
+    retry_events: list[RetryEvent] = []
+
+    @dataclass
+    class _FailingRetryProvider:
+        def send(self, request: LogicalRequest) -> ProviderResponse:
+            retry_events.append(
+                {"retry_number": 1, "trigger": "transport_error", "status_code": None}
+            )
+            raise ProviderServerError("The model service is temporarily unavailable.")
+
+    with pytest.raises(ProviderServerError):
+        run_workflow(
+            settings=_settings(log_path),
+            profile=_profile(),
+            provider=_FailingRetryProvider(),
+            action="show_full",
+            selected_text="Text",
+            source_process_name="editor.exe",
+            source_window_title="Draft",
+            retry_events=retry_events,
+        )
+
+    event = _event(log_path)
+    assert event["event"] == "invocation_failed"
+    assert event["retry_events"] == [
+        {"retry_number": 1, "trigger": "transport_error", "status_code": None}
+    ]
+
+
+def test_real_sdk_retry_is_included_in_the_completed_invocation_log(tmp_path: Path) -> None:
+    log_path = tmp_path / "events.jsonl"
+    settings = _settings(log_path)
+    retry_events: list[RetryEvent] = []
+    attempts = 0
+    created_clients: list[OpenAI] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            return httpx2.Response(
+                500,
+                request=request,
+                headers={"retry-after-ms": "1"},
+                json={"error": {"message": "temporary", "type": "server_error"}},
+            )
+        return httpx2.Response(
+            200,
+            request=request,
+            json={
+                "id": "resp_retry",
+                "object": "response",
+                "created_at": 0,
+                "status": "completed",
+                "error": None,
+                "incomplete_details": None,
+                "instructions": None,
+                "max_output_tokens": 2048,
+                "model": "gpt-5.6-luna",
+                "output": [
+                    {
+                        "id": "msg_retry",
+                        "type": "message",
+                        "status": "completed",
+                        "role": "assistant",
+                        "content": [
+                            {
+                                "type": "output_text",
+                                "text": '{"corrections":[],"final_text":"Text"}',
+                                "annotations": [],
+                                "logprobs": [],
+                            }
+                        ],
+                    }
+                ],
+                "parallel_tool_calls": True,
+                "previous_response_id": None,
+                "reasoning": {"effort": None, "summary": None},
+                "store": False,
+                "temperature": 1.0,
+                "text": {"format": {"type": "text"}},
+                "tool_choice": "auto",
+                "tools": [],
+                "top_p": 1.0,
+                "truncation": "disabled",
+                "usage": None,
+                "metadata": {},
+            },
+        )
+
+    def client_factory(**kwargs: object) -> object:
+        client = OpenAI(
+            api_key=str(kwargs["api_key"]),
+            timeout=float(kwargs["timeout"]),
+            max_retries=int(kwargs["max_retries"]),
+            base_url="https://api.openai.test/v1/",
+            http_client=kwargs["http_client"],  # type: ignore[arg-type]
+        )
+        created_clients.append(client)
+        return client
+
+    def http_client_factory(**kwargs: object) -> object:
+        return httpx2.Client(transport=httpx2.MockTransport(handler), **kwargs)
+
+    provider = OpenAIProvider(
+        settings,
+        _SENTINEL_KEY,
+        client_factory=client_factory,
+        http_client_factory=http_client_factory,
+        retry_event_sink=retry_events.append,
+    )
+
+    try:
+        result = run_workflow(
+            settings=settings,
+            profile=_profile(),
+            provider=provider,
+            action="show_full",
+            selected_text="Text",
+            source_process_name="editor.exe",
+            source_window_title="Draft",
+            retry_events=retry_events,
+            sensitive_values=(_SENTINEL_KEY,),
+        )
+    finally:
+        for client in created_clients:
+            client.close()
+
+    assert attempts == 2
+    assert result.final_text == "Text"
+    assert _event(log_path)["retry_events"] == [
+        {"retry_number": 1, "trigger": "http_status", "status_code": 500}
+    ]
+    assert _SENTINEL_KEY not in log_path.read_text(encoding="utf-8")

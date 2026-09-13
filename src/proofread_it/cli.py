@@ -9,6 +9,7 @@ from pathlib import Path
 from proofread_it.config.loader import ConfigurationError, load_profile, load_settings
 from proofread_it.errors import MalformedResponseError, ProviderError
 from proofread_it.presentation.result_window import show_result
+from proofread_it.providers.base import RetryEvent
 from proofread_it.providers.credentials import CredentialError, read_api_key_from_environment
 from proofread_it.providers.openai import OpenAIProvider
 from proofread_it.source_check import BLOCKED_EXIT_CODE, blocked_message, check_current_source
@@ -42,14 +43,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             return BLOCKED_EXIT_CODE
         profile = load_profile(options.settings.with_name("profiles.json"), options.profile)
         api_key = read_api_key_from_environment(settings.api.api_key_env)
+        retry_events: list[RetryEvent] = []
         result = run_workflow(
             settings=settings,
             profile=profile,
-            provider=OpenAIProvider(settings, api_key),
+            provider=OpenAIProvider(
+                settings,
+                api_key,
+                retry_event_sink=retry_events.append,
+            ),
             action=options.action,
             selected_text=os.environ.get(_SOURCE_TEXT, ""),
             source_process_name=os.environ.get(_SOURCE_PROCESS_NAME) or None,
             source_window_title=os.environ.get(_SOURCE_WINDOW_TITLE) or None,
+            retry_events=retry_events,
             sensitive_values=(api_key,),
         )
     except (ConfigurationError, CredentialError, MalformedResponseError, ProviderError, ValueError) as error:

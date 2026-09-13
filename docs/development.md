@@ -46,9 +46,12 @@ shown.
 
 Every completed or failed API invocation is appended to `logs/proofread-it.jsonl`. The event contains
 the selected text and source context, complete logical request, request duration, API status, model
-output, raw API response, normalized result, or safe error detail. API keys and authorization fields are
-redacted, but the remaining log is intentionally sensitive. Keep it private and delete it according
-to your needs. The `logs/` directory is ignored by Git.
+output, raw API response, normalized result, SDK retry observations, or safe error detail. Each item
+in `retry_events` identifies the one-based retry number and whether it followed an HTTP response
+(including its status code) or a transport failure with no response. Request bodies, headers, and
+credentials are never copied into retry observations. API keys and authorization fields are redacted,
+but the remaining log is intentionally sensitive. Keep it private and delete it according to your
+needs. The `logs/` directory is ignored by Git.
 
 ## Development API credential
 
