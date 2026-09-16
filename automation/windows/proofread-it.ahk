@@ -17,18 +17,24 @@ Invoke(profile, action) {
     global InvokeScriptPath, SettingsPath, SourceCheckCommand
 
     if invocationActive {
-        MsgBox("Proofreading is already in progress.", "Proofread It", "Icon!")
+        NotifyConcurrentInvocation()
         return
     }
     invocationActive := true
-
-    activeWindow := WinExist("A")
-    processName := activeWindow ? WinGetProcessName("ahk_id " activeWindow) : ""
-    windowTitle := activeWindow ? WinGetTitle("ahk_id " activeWindow) : ""
-
-    EnvSet("PROOFREAD_IT_SOURCE_PROCESS_NAME", processName)
-    EnvSet("PROOFREAD_IT_SOURCE_WINDOW_TITLE", windowTitle)
+    mutexHandle := 0
     try {
+        mutexHandle := TryAcquireInvocationMutex()
+        if !mutexHandle {
+            NotifyConcurrentInvocation()
+            return
+        }
+
+        activeWindow := WinExist("A")
+        processName := activeWindow ? WinGetProcessName("ahk_id " activeWindow) : ""
+        windowTitle := activeWindow ? WinGetTitle("ahk_id " activeWindow) : ""
+
+        EnvSet("PROOFREAD_IT_SOURCE_PROCESS_NAME", processName)
+        EnvSet("PROOFREAD_IT_SOURCE_WINDOW_TITLE", windowTitle)
         policyCommand := Format(
             '{1} --settings "{2}" --profile "{3}" --action "{4}"',
             SourceCheckCommand,
@@ -85,11 +91,58 @@ Invoke(profile, action) {
             A_Clipboard := correctedText
         }
     } finally {
-        invocationActive := false
-        EnvSet("PROOFREAD_IT_SOURCE_PROCESS_NAME", "")
-        EnvSet("PROOFREAD_IT_SOURCE_WINDOW_TITLE", "")
-        EnvSet("PROOFREAD_IT_SOURCE_TEXT", "")
+        try {
+            EnvSet("PROOFREAD_IT_SOURCE_PROCESS_NAME", "")
+            EnvSet("PROOFREAD_IT_SOURCE_WINDOW_TITLE", "")
+            EnvSet("PROOFREAD_IT_SOURCE_TEXT", "")
+        } finally {
+            try {
+                if mutexHandle {
+                    ReleaseInvocationMutex(mutexHandle)
+                }
+            } finally {
+                invocationActive := false
+            }
+        }
     }
+}
+
+TryAcquireInvocationMutex() {
+    ; One name covers direct execution and every script that includes this file.
+    mutexHandle := DllCall("Kernel32\CreateMutexW", "Ptr", 0, "Int", 0,
+        "Str", "Local\ProofreadIt.Invocation", "Ptr")
+    if !mutexHandle {
+        throw Error("Cannot create the proofreading invocation mutex.")
+    }
+
+    waitResult := DllCall("Kernel32\WaitForSingleObject", "Ptr", mutexHandle, "UInt", 0, "UInt")
+    if (waitResult = 0 || waitResult = 0x80) {
+        return mutexHandle
+    }
+    DllCall("Kernel32\CloseHandle", "Ptr", mutexHandle)
+    if (waitResult = 0x102) {
+        return 0
+    }
+    throw Error("Cannot acquire the proofreading invocation mutex.")
+}
+
+ReleaseInvocationMutex(mutexHandle) {
+    try {
+        if !DllCall("Kernel32\ReleaseMutex", "Ptr", mutexHandle) {
+            throw Error("Cannot release the proofreading invocation mutex.")
+        }
+    } finally {
+        DllCall("Kernel32\CloseHandle", "Ptr", mutexHandle)
+    }
+}
+
+NotifyConcurrentInvocation() {
+    ToolTip("Proofreading is already in progress.", , , 20)
+    SetTimer(HideConcurrentNotification, -2500)
+}
+
+HideConcurrentNotification() {
+    ToolTip(, , , 20)
 }
 
 RunCaptured(command, &standardOutput, &standardError) {

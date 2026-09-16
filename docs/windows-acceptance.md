@@ -50,8 +50,15 @@ invocation, the clipboard must contain only its normalized `final_text`.
    accepted normally. Repeat after a deliberately failed request to confirm the guard is released.
 
 These checks exercise both action hotkeys and the lifecycle around success and failure. A separate
-host loaded through `#Include` is additionally serialized by the backend lock at
-`concurrency.lock_path`.
+host loaded through `#Include` also shares the AutoHotkey invocation mutex. To verify this boundary,
+keep the direct script running and start a temporary host with the same `#Include` plus a distinct
+test binding such as `^!q::Invoke("proofread", "copy_final")`. While the direct host handles a request,
+press `Ctrl+Alt+Q`. Confirm the temporary host shows the in-progress tooltip without changing the
+active window, copying a selection, changing the clipboard, or sending another API request. After
+the first action ends, the temporary host must accept a new invocation. The offline test
+`tests/windows/test_ahk_invocation_mutex.py` separately checks mutex recovery when its owning
+AutoHotkey process exits. The backend lock at `concurrency.lock_path` remains the final guard for
+direct backend launches.
 
 ## Source exclusions
 
