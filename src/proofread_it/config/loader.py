@@ -7,6 +7,7 @@ from typing import cast
 
 from proofread_it.config.schemas import (
     ApiSettings,
+    ConcurrencySettings,
     ContextField,
     ContextSettings,
     ExclusionSettings,
@@ -95,17 +96,24 @@ def load_settings(path: Path) -> Settings:
         "settings.context.exclusions.window_title_words",
     )
 
+    concurrency_payload = payload.get("concurrency")
+    if not isinstance(concurrency_payload, dict):
+        raise ConfigurationError("settings.concurrency must be an object")
+    _require_exact_keys(concurrency_payload, {"lock_path"}, "settings.concurrency")
+    lock_path = _load_path(
+        concurrency_payload.get("lock_path"),
+        "settings.concurrency.lock_path",
+        settings_path=path,
+    )
+
     logging_payload = payload.get("logging")
     if not isinstance(logging_payload, dict):
         raise ConfigurationError("settings.logging must be an object")
-
-    raw_log_path = logging_payload.get("path")
-    if not isinstance(raw_log_path, str) or not raw_log_path.strip():
-        raise ConfigurationError("settings.logging.path must be a non-empty string")
-
-    log_path = Path(raw_log_path)
-    if not log_path.is_absolute():
-        log_path = path.parent / log_path
+    log_path = _load_path(
+        logging_payload.get("path"),
+        "settings.logging.path",
+        settings_path=path,
+    )
 
     return Settings(
         schema_version=1,
@@ -124,7 +132,8 @@ def load_settings(path: Path) -> Settings:
                 window_title_words=window_title_words,
             ),
         ),
-        logging=LoggingSettings(path=log_path.resolve()),
+        concurrency=ConcurrencySettings(lock_path=lock_path),
+        logging=LoggingSettings(path=log_path),
     )
 
 
@@ -215,6 +224,16 @@ def _load_integer(value: object, field_path: str, *, minimum: int) -> int:
         qualifier = "a positive integer" if minimum == 1 else "a non-negative integer"
         raise ConfigurationError(f"{field_path} must be {qualifier}")
     return value
+
+
+def _load_path(value: object, field_path: str, *, settings_path: Path) -> Path:
+    if not isinstance(value, str) or not value.strip():
+        raise ConfigurationError(f"{field_path} must be a non-empty string")
+
+    loaded_path = Path(value)
+    if not loaded_path.is_absolute():
+        loaded_path = settings_path.parent / loaded_path
+    return loaded_path.resolve()
 
 
 def _load_unique_strings(value: object, field_path: str) -> tuple[str, ...]:

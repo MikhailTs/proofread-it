@@ -39,6 +39,12 @@ A blocked action shows a notification, logs the observed source and matched rule
 the selection, read the API credential, or start the API backend.
 If the active window, process, or title changes during the check, the action stops and asks the user
 to select the text and try again.
+Only one invocation may run at a time. A repeated hotkey is rejected immediately, before the active
+window or clipboard is read, and shows `Proofreading is already in progress.` The Python backend also holds the
+non-blocking operating-system lock configured by `concurrency.lock_path`, so separate automation
+hosts or direct backend launches cannot overlap. The lock file is a persistent coordination file;
+its presence alone does not mean an invocation is active, and it does not need to be deleted after a
+normal or failed run.
 The backend loads the selected profile, builds one stateless strict-schema request, calls the OpenAI
 Responses API, validates the returned corrections and final text, and performs the selected action.
 If copying does not produce text within one second, the backend is not started and a concise error is

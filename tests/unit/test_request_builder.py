@@ -7,6 +7,7 @@ import pytest
 
 from proofread_it.config.schemas import (
     ApiSettings,
+    ConcurrencySettings,
     ContextSettings,
     LoggingSettings,
     Profile,
@@ -27,6 +28,7 @@ def _settings(*context_fields: str) -> Settings:
         ),
         default_profile="proofread",
         context=ContextSettings(fields=context_fields),
+        concurrency=ConcurrencySettings(lock_path=Path("request.lock")),
         logging=LoggingSettings(path=Path("events.jsonl")),
     )
 

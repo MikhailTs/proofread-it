@@ -19,7 +19,8 @@ using the model and limits in `config/settings.json`.
 5. In another application, select non-empty multiline text containing non-ASCII characters, but do
    not copy it manually.
 6. Press `Ctrl+Alt+E`. Confirm a `Proofread It` window opens with corrections under `Explanation`
-   and the complete corrected text under `Result`, then close it.
+   and the complete corrected text under `Result`, then close it. No helper terminal should appear,
+   receive focus, or trigger an active-window-changed notification.
 7. Inspect the last JSON line in `logs/proofread-it.jsonl`.
 8. Paste into a scratch editor and confirm the original clipboard sentinel is pasted.
 9. Repeat with `Ctrl+Alt+Shift+E`, then inspect the new last JSON line.
@@ -32,6 +33,25 @@ result window must show both result fields and remain readable when resized. Aft
 clipboard content from before invocation must be restored. The second event must contain action
 `copy_final`, its exact selection, successful API diagnostics, and the normalized result; after that
 invocation, the clipboard must contain only its normalized `final_text`.
+
+## Parallel invocation protection
+
+1. Copy a recognizable clipboard sentinel, select non-empty text in another application, and press
+   `Ctrl+Alt+E`.
+2. While that request is still running, press `Ctrl+Alt+E` and `Ctrl+Alt+Shift+E` again.
+3. Before the original result window appears or closes, confirm each accepted duplicate hotkey
+   thread immediately shows `Proofreading is already in progress.` and does not copy a new selection
+   or change the clipboard sentinel.
+4. Confirm the original request produces its one result and appends exactly one completed or failed
+   invocation event; there must be no event or API request for a rejected duplicate.
+5. While a request is active, start the same automation entry point again and confirm the existing
+   process and request remain active rather than being replaced.
+6. After the original request or result window ends, invoke either action again and confirm it is
+   accepted normally. Repeat after a deliberately failed request to confirm the guard is released.
+
+These checks exercise both action hotkeys and the lifecycle around success and failure. A separate
+host loaded through `#Include` is additionally serialized by the backend lock at
+`concurrency.lock_path`.
 
 ## Source exclusions
 

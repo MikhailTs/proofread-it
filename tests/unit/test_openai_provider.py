@@ -20,6 +20,7 @@ from openai import (
 
 from proofread_it.config.schemas import (
     ApiSettings,
+    ConcurrencySettings,
     ContextSettings,
     LoggingSettings,
     Settings,
@@ -53,6 +54,7 @@ def _settings(*, retry_count: int = 2) -> Settings:
         ),
         default_profile="proofread",
         context=ContextSettings(fields=()),
+        concurrency=ConcurrencySettings(lock_path=Path("request.lock")),
         logging=LoggingSettings(path=Path("events.jsonl")),
     )
 

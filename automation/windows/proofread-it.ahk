@@ -1,17 +1,26 @@
 #Requires AutoHotkey v2.0
-#SingleInstance Force
+#SingleInstance Ignore
 
 SplitPath(A_LineFile, , &AutomationDir)
 ProjectRoot := AutomationDir "\..\.."
 SettingsPath := ProjectRoot "\config\settings.json"
 InvokeScriptPath := ProjectRoot "\scripts\invoke.ps1"
-SourceCheckCommand := 'uv run --project "' ProjectRoot '" --no-sync python -m proofread_it.source_check'
+SourceCheckCommand := 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -Command uv run --project "' ProjectRoot '" --no-sync python -m proofread_it.source_check'
 
+#MaxThreadsPerHotkey 2
 ^!e::Invoke("proofread", "show_full")
 ^!+e::Invoke("proofread", "copy_final")
+#MaxThreadsPerHotkey 1
 
 Invoke(profile, action) {
+    static invocationActive := false
     global InvokeScriptPath, SettingsPath, SourceCheckCommand
+
+    if invocationActive {
+        MsgBox("Proofreading is already in progress.", "Proofread It", "Icon!")
+        return
+    }
+    invocationActive := true
 
     activeWindow := WinExist("A")
     processName := activeWindow ? WinGetProcessName("ahk_id " activeWindow) : ""
@@ -27,10 +36,8 @@ Invoke(profile, action) {
             profile,
             action
         )
-        policyProcess := ComObject("WScript.Shell").Exec(policyCommand)
-        policyOutput := policyProcess.StdOut.ReadAll()
-        policyError := policyProcess.StdErr.ReadAll()
-        if (policyProcess.ExitCode != 0) {
+        policyExitCode := RunCaptured(policyCommand, &policyOutput, &policyError)
+        if (policyExitCode != 0) {
             message := Trim(policyError)
             if (message = "") {
                 message := "Proofreading is blocked for the active application or window."
@@ -59,16 +66,14 @@ Invoke(profile, action) {
         EnvSet("PROOFREAD_IT_SOURCE_TEXT", selectedText)
 
         command := Format(
-            'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{1}" -SettingsPath "{2}" -Profile "{3}" -Action "{4}"',
+            'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "{1}" -SettingsPath "{2}" -Profile "{3}" -Action "{4}"',
             InvokeScriptPath,
             SettingsPath,
             profile,
             action
         )
-        process := ComObject("WScript.Shell").Exec(command)
-        correctedText := process.StdOut.ReadAll()
-        errorText := process.StdErr.ReadAll()
-        if (process.ExitCode != 0) {
+        exitCode := RunCaptured(command, &correctedText, &errorText)
+        if (exitCode != 0) {
             message := Trim(errorText)
             if (message = "") {
                 message := "Proofreading failed. See the application log for details."
@@ -80,9 +85,30 @@ Invoke(profile, action) {
             A_Clipboard := correctedText
         }
     } finally {
+        invocationActive := false
         EnvSet("PROOFREAD_IT_SOURCE_PROCESS_NAME", "")
         EnvSet("PROOFREAD_IT_SOURCE_WINDOW_TITLE", "")
         EnvSet("PROOFREAD_IT_SOURCE_TEXT", "")
+    }
+}
+
+RunCaptured(command, &standardOutput, &standardError) {
+    token := DllCall("GetCurrentProcessId") "-" A_TickCount "-" Random(100000, 999999)
+    outputPath := A_Temp "\proofread-it-" token ".stdout"
+    errorPath := A_Temp "\proofread-it-" token ".stderr"
+    try {
+        target := A_ComSpec ' /D /C ' command ' > "' outputPath '" 2> "' errorPath '"'
+        exitCode := RunWait(target, , "Hide")
+        standardOutput := FileExist(outputPath) ? FileRead(outputPath) : ""
+        standardError := FileExist(errorPath) ? FileRead(errorPath) : ""
+        return exitCode
+    } finally {
+        if FileExist(outputPath) {
+            FileDelete(outputPath)
+        }
+        if FileExist(errorPath) {
+            FileDelete(errorPath)
+        }
     }
 }
 

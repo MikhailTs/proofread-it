@@ -18,6 +18,7 @@ def test_shipped_default_profile_loads_with_the_accepted_contract() -> None:
     assert settings.api.retry_count == 2
     assert settings.context.exclusions.process_names == ("KeePass.exe",)
     assert settings.context.exclusions.window_title_words == ("password",)
+    assert settings.concurrency.lock_path == repository_root / "logs" / "proofread-it.lock"
     assert profile.name == "proofread"
     assert profile.task == "proofread_english"
     assert profile.context_fields == (

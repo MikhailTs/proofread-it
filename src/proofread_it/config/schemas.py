@@ -42,6 +42,13 @@ class LoggingSettings:
 
 
 @dataclass(frozen=True, slots=True)
+class ConcurrencySettings:
+    """Filesystem location used to serialize backend invocations."""
+
+    lock_path: Path
+
+
+@dataclass(frozen=True, slots=True)
 class Settings:
     """Validated operational settings."""
 
@@ -49,6 +56,7 @@ class Settings:
     api: ApiSettings
     default_profile: str
     context: ContextSettings
+    concurrency: ConcurrencySettings
     logging: LoggingSettings
 
 

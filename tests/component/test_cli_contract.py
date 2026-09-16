@@ -7,6 +7,11 @@ from pathlib import Path
 from pytest import CaptureFixture, MonkeyPatch
 
 from proofread_it.cli import main
+from proofread_it.concurrency import (
+    CONCURRENT_EXIT_CODE,
+    CONCURRENT_MESSAGE,
+    SingleRequestLock,
+)
 from proofread_it.models import LogicalRequest
 from proofread_it.providers.base import ProviderResponse
 from proofread_it.source_check import BLOCKED_EXIT_CODE
@@ -50,6 +55,7 @@ def _write_config(tmp_path: Path) -> Path:
                     "fields": ["application_name", "window_title"],
                     "exclusions": {"process_names": [], "window_title_words": []},
                 },
+                "concurrency": {"lock_path": "request.lock"},
                 "logging": {"path": "events.jsonl"},
             }
         ),
@@ -230,3 +236,39 @@ def test_excluded_source_fails_before_reading_credentials_or_constructing_provid
     assert not constructed
     assert "KeePass.exe" in captured.err
     assert "must-not-be-sent" not in raw_log
+
+
+def test_parallel_invocation_is_rejected_before_credentials_or_provider(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    capsys: CaptureFixture[str],
+) -> None:
+    settings_path = _write_config(tmp_path)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    constructed = False
+
+    def provider_factory(*_args: object) -> _FakeProvider:
+        nonlocal constructed
+        constructed = True
+        return _FakeProvider()
+
+    monkeypatch.setattr("proofread_it.cli.OpenAIProvider", provider_factory)
+
+    with SingleRequestLock(tmp_path / "request.lock"):
+        exit_code = main(
+            [
+                "--settings",
+                str(settings_path),
+                "--profile",
+                "proofread",
+                "--action",
+                "copy_final",
+            ]
+        )
+
+    captured = capsys.readouterr()
+    assert exit_code == CONCURRENT_EXIT_CODE
+    assert captured.out == ""
+    assert captured.err.strip() == CONCURRENT_MESSAGE
+    assert not constructed
+    assert not (tmp_path / "events.jsonl").exists()

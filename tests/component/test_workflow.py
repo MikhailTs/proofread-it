@@ -10,6 +10,7 @@ from openai import OpenAI
 
 from proofread_it.config.schemas import (
     ApiSettings,
+    ConcurrencySettings,
     ContextSettings,
     LoggingSettings,
     Profile,
@@ -54,6 +55,7 @@ def _settings(log_path: Path) -> Settings:
         ),
         default_profile="proofread",
         context=ContextSettings(fields=("application_name", "window_title")),
+        concurrency=ConcurrencySettings(lock_path=log_path.with_suffix(".lock")),
         logging=LoggingSettings(path=log_path),
     )
 

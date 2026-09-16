@@ -31,6 +31,7 @@ def _settings_payload(log_path: str) -> dict[str, object]:
                 "window_title_words": ["password"],
             },
         },
+        "concurrency": {"lock_path": "request.lock"},
         "logging": {"path": log_path},
     }
 
@@ -46,6 +47,29 @@ def test_log_path_is_resolved_relative_to_settings_file(tmp_path: Path) -> None:
     settings = load_settings(settings_path)
 
     assert settings.logging.path == tmp_path / "logs" / "events.jsonl"
+
+
+def test_lock_path_is_resolved_relative_to_settings_file(tmp_path: Path) -> None:
+    settings_path = tmp_path / "config" / "settings.json"
+    settings_path.parent.mkdir()
+    payload = _settings_payload("../logs/events.jsonl")
+    payload["concurrency"] = {"lock_path": "../runtime/request.lock"}
+    settings_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    settings = load_settings(settings_path)
+
+    assert settings.concurrency.lock_path == tmp_path / "runtime" / "request.lock"
+
+
+@pytest.mark.parametrize("value", [None, "", "   "])
+def test_invalid_concurrency_lock_path_is_rejected(tmp_path: Path, value: object) -> None:
+    settings_path = tmp_path / "settings.json"
+    payload = _settings_payload("events.jsonl")
+    payload["concurrency"] = {"lock_path": value}
+    settings_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ConfigurationError, match=r"settings\.concurrency\.lock_path"):
+        load_settings(settings_path)
 
 
 def test_boolean_schema_version_is_rejected(tmp_path: Path) -> None:

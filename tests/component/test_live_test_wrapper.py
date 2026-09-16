@@ -28,6 +28,7 @@ def _write_settings(path: Path) -> None:
                     "fields": [],
                     "exclusions": {"process_names": [], "window_title_words": []},
                 },
+                "concurrency": {"lock_path": "request.lock"},
                 "logging": {"path": "events.jsonl"},
             }
         ),

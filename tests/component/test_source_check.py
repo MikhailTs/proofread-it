@@ -28,6 +28,7 @@ def _write_settings(path: Path) -> None:
                         "window_title_words": ["password"],
                     },
                 },
+                "concurrency": {"lock_path": "request.lock"},
                 "logging": {"path": "events.jsonl"},
             }
         ),

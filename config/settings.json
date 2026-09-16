@@ -23,6 +23,9 @@
       ]
     }
   },
+  "concurrency": {
+    "lock_path": "../logs/proofread-it.lock"
+  },
   "logging": {
     "path": "../logs/proofread-it.jsonl"
   }
