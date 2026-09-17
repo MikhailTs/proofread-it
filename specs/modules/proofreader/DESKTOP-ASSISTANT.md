@@ -31,7 +31,7 @@ The product is a desktop text-transformation tool, not a chat client. Every requ
 - [ ] The request can include the source application, process name, and active-window title only when both global collection policy and the selected profile permit them.
 - [ ] An excluded application or title pattern prevents clipboard capture and prevents any API request; the user receives a concise blocked-action notification.
 - [ ] An empty or unavailable selection prevents any API request and produces a concise user-facing error.
-- [ ] Clipboard contents are restored after capture unless the selected action intentionally places corrected text on the clipboard or restoration is disabled.
+- [ ] Clipboard contents are restored after capture unless the selected action intentionally places corrected text on the clipboard.
 - [ ] A second invocation while a request is active is rejected with a concise notification.
 - [ ] Missing credentials, invalid configuration, authentication failures, timeouts, connection failures, rate limits, server failures, unsupported models, malformed responses, and empty model output fail visibly without exposing credentials.
 - [ ] The single MVP log contains diagnostic events, captured context, source text, complete logical requests, raw responses, normalized results, and errors, but contains no API key or authorization header.
@@ -101,7 +101,7 @@ The shipped AutoHotkey automation MUST support both direct execution as the appl
 
 **Normative:** The MVP MUST load two distinct, human-editable JSON files:
 
-- `settings.json` defines operational behavior: schema version, API model and credential source, timeouts and retries, default profile, clipboard policy, UI policy, context allow/exclusion policy, concurrency behavior, logging behavior, and relevant paths.
+- `settings.json` defines operational behavior: schema version, API model and credential source, timeouts and retries, default profile, context allow/exclusion policy, concurrency behavior, logging behavior, and relevant paths.
 - `profiles.json` defines model-processing behavior: schema version, task identifier, editable instructions, editing policy, output policy, tone/register guidance, and the subset of globally permitted context fields used by each profile. In schema version `1`, `profiles` MUST be an object keyed by profile name, and each profile MUST contain exactly `task`, `instructions`, and `context_fields`. `task` and `instructions` MUST be non-empty strings. `instructions` MUST contain the complete stable model prompt; editing, output, and tone/register policy MUST be expressed there instead of duplicated as independent control fields. `context_fields` MUST be an array of unique names drawn only from `application_name`, `process_name`, and `window_title`.
 
 Operational settings MUST NOT contain proofreading-specific language rules. Profiles MUST NOT contain capture, credential, concurrency, file-path, or logging mechanics. Each file MUST contain `schema_version`; the MVP version is integer `1`. Unsupported versions MUST fail clearly rather than be interpreted silently. Configuration fields MUST be added only for implemented behavior or a demonstrated extension point that would otherwise require a breaking format change.
@@ -289,11 +289,11 @@ Given identical selected text, profile, normalized context, and settings, the bu
 
 **Normative:** For an allowed invocation, the automation layer MUST preserve the existing clipboard, issue the active application's standard copy command, wait for a clipboard update with a bounded timeout, and pass a non-empty textual selection to the backend. It MUST NOT assume an instantaneous update or reuse stale clipboard text as a selection fallback.
 
-If no usable selection is obtained, the application MUST make no API request and MUST show a concise error such as `No selected text was detected.` After successful capture, the previous clipboard MUST be restored by default, including non-text formats where feasible. Restoration MUST NOT occur when the invoked result action intentionally copies corrected text, and MAY be disabled by configuration.
+If no usable selection is obtained, the application MUST make no API request and MUST show a concise error such as `No selected text was detected.` After successful capture, the previous clipboard MUST be restored, including non-text formats where feasible. Restoration MUST NOT occur when the invoked result action intentionally copies corrected text.
 
 **Rationale:** Clipboard-based capture works across target applications but requires explicit stale-data and restoration safeguards.
 
-**Verification:** Automation tests or Windows manual tests cover delayed copy, no selection, stale clipboard, text and representative non-text clipboard restoration, disabled restoration, and intentional final-text copy.
+**Verification:** Automation tests or Windows manual tests cover delayed copy, no selection, stale clipboard, text and representative non-text clipboard restoration, and intentional final-text copy.
 
 **Alternatives:** Processing existing clipboard text when no selection is detected and direct replacement of the original selection are outside the MVP.
 
@@ -450,3 +450,5 @@ Windows Credential Manager integration MUST be the first post-MVP implementation
   `configured exclusions with unspecified schema, matching rules, and shipped values -> editable process-name and window-title-word lists with deterministic case-insensitive matching, initially containing KeePass.exe and password, enforced before clipboard capture without credential access`; reason: `provide an immediately useful privacy denylist that remains user-configurable`; invalidates: `settings schema and shipped configuration, context-policy implementation, AutoHotkey invocation order, blocked-event logging, configuration and Windows-boundary tests, and customization documentation`; review: `NONE`.
 - 2026-09-17 — Project owner — `spec://proofreader/DESKTOP-ASSISTANT#configuration`, `spec://proofreader/DESKTOP-ASSISTANT#interaction`:
   `hotkeys require explicit profile names and invocation boundaries reject omitted profiles -> profile omission selects settings.default_profile while an explicit name remains an override`; reason: `make the configured default effective for ordinary desktop and direct backend use`; invalidates: `AutoHotkey bindings and invocation commands, backend and source-check CLIs, credential wrapper, routing tests, and desktop documentation`; review: `NONE`.
+- 2026-09-17 — Project owner — `spec://proofreader/DESKTOP-ASSISTANT#acceptance`, `spec://proofreader/DESKTOP-ASSISTANT#configuration`, `spec://proofreader/DESKTOP-ASSISTANT#clipboard`:
+  `MVP settings include clipboard and UI policies and clipboard restoration may be disabled by configuration -> MVP settings do not require those policies and captured clipboard contents are restored unless the result action copies corrected text`; reason: `Project owner removed the unused settings requirements`; invalidates: `prior configuration and clipboard acceptance evidence; current settings, automation, and clipboard tests require revalidation`; review: `NONE`.
