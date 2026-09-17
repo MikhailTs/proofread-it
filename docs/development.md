@@ -24,9 +24,16 @@ AutoHotkey is in a custom location, pass `-AutoHotkeyPath C:\path\to\AutoHotkey6
 automation can also be started directly or loaded from an existing AutoHotkey v2 host with
 `#Include`; all three modes expose the development bindings:
 
-- `Ctrl+Alt+E` sends a `proofread` / `show_full` request and opens the validated result window.
-- `Ctrl+Alt+Shift+E` sends a `proofread` / `copy_final` request and places only the validated final
-  text on the clipboard.
+- `Ctrl+Alt+E` uses `default_profile` from `config/settings.json` with `show_full` and opens the
+  validated result window.
+- `Ctrl+Alt+Shift+E` uses the same default profile with `copy_final` and places only the
+  validated final text on the clipboard.
+
+The shipped default is `proofread`. Changing `default_profile` changes the profile used by both
+hotkeys without editing the AutoHotkey script. A custom binding may still select a named profile
+explicitly with `Invoke("profile_name", "show_full")`; `InvokeDefault("show_full")` uses the
+configured default. The backend and source-check commands also use `default_profile` when
+`--profile` is omitted, and `scripts/invoke.ps1` forwards `-Profile` only when supplied.
 
 Each hotkey preserves the current clipboard, copies the selected text with the active application's
 standard copy command, restores the clipboard, and passes non-empty text to the Python backend.

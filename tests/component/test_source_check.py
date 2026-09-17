@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+import pytest
 from pytest import CaptureFixture, MonkeyPatch
 
 from proofread_it.source_check import BLOCKED_EXIT_CODE, main
@@ -36,28 +37,31 @@ def _write_settings(path: Path) -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("requested_profile", "expected_profile"),
+    [(None, "alternate"), ("proofread", "proofread")],
+)
 def test_blocked_source_is_logged_without_text_request_response_or_credential(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
     capsys: CaptureFixture[str],
+    requested_profile: str | None,
+    expected_profile: str,
 ) -> None:
     settings_path = tmp_path / "settings.json"
     _write_settings(settings_path)
+    settings = json.loads(settings_path.read_text(encoding="utf-8"))
+    settings["default_profile"] = "alternate"
+    settings_path.write_text(json.dumps(settings), encoding="utf-8")
     monkeypatch.setenv("PROOFREAD_IT_SOURCE_PROCESS_NAME", "KEEPASS.EXE")
     monkeypatch.setenv("PROOFREAD_IT_SOURCE_WINDOW_TITLE", "Database")
     monkeypatch.setenv("PROOFREAD_IT_SOURCE_TEXT", "must-not-be-read")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
-    exit_code = main(
-        [
-            "--settings",
-            str(settings_path),
-            "--profile",
-            "proofread",
-            "--action",
-            "show_full",
-        ]
-    )
+    arguments = ["--settings", str(settings_path), "--action", "show_full"]
+    if requested_profile is not None:
+        arguments += ["--profile", requested_profile]
+    exit_code = main(arguments)
 
     captured = capsys.readouterr()
     event = json.loads((tmp_path / "events.jsonl").read_text(encoding="utf-8"))
@@ -66,7 +70,7 @@ def test_blocked_source_is_logged_without_text_request_response_or_credential(
     assert event == {
         "timestamp": event["timestamp"],
         "event": "invocation_blocked",
-        "profile": "proofread",
+        "profile": expected_profile,
         "action": "show_full",
         "source": {
             "application_name": "KeePass",

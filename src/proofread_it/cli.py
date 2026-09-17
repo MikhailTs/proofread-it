@@ -29,7 +29,7 @@ _SOURCE_WINDOW_TITLE = "PROOFREAD_IT_SOURCE_WINDOW_TITLE"
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="proofread-it")
     parser.add_argument("--settings", required=True, type=Path)
-    parser.add_argument("--profile", required=True)
+    parser.add_argument("--profile")
     parser.add_argument("--action", required=True, choices=("show_full", "copy_final"))
     return parser
 
@@ -39,16 +39,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     options = _parser().parse_args(argv)
     try:
         settings = load_settings(options.settings)
+        profile_name = options.profile if options.profile is not None else settings.default_profile
         with SingleRequestLock(settings.concurrency.lock_path):
             exclusion = check_current_source(
                 settings,
-                profile=options.profile,
+                profile=profile_name,
                 action=options.action,
             )
             if exclusion is not None:
                 print(blocked_message(exclusion), file=sys.stderr)
                 return BLOCKED_EXIT_CODE
-            profile = load_profile(options.settings.with_name("profiles.json"), options.profile)
+            profile = load_profile(options.settings.with_name("profiles.json"), profile_name)
             api_key = read_api_key_from_environment(settings.api.api_key_env)
             retry_events: list[RetryEvent] = []
             result = run_workflow(

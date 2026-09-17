@@ -41,6 +41,7 @@ def _write_fake_uv(path: Path) -> None:
         f"""@echo off
 if not \"%{_API_KEY_ENV}%\"==\"{_SENTINEL}\" exit /b 41
 > \"%PROOFREAD_IT_BACKEND_MARKER%\" echo backend-observed-key
+> \"%PROOFREAD_IT_BACKEND_ARGS_MARKER%\" echo %*
 echo backend-output
 exit /b 0
 """,
@@ -54,28 +55,32 @@ def _run_wrapper(
     user_profile: Path,
     fake_bin: Path,
     marker_path: Path,
+    profile: str | None = "proofread",
 ) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
     environment["USERPROFILE"] = str(user_profile)
     environment["PROOFREAD_IT_BACKEND_MARKER"] = str(marker_path)
+    environment["PROOFREAD_IT_BACKEND_ARGS_MARKER"] = str(
+        marker_path.with_name("backend-args.txt")
+    )
     environment["PATH"] = f"{fake_bin}{os.pathsep}{environment['PATH']}"
     environment.pop(_API_KEY_ENV, None)
+    arguments = [
+        "powershell.exe",
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(repository_root / "scripts" / "invoke.ps1"),
+        "-SettingsPath",
+        str(settings_path),
+    ]
+    if profile is not None:
+        arguments += ["-Profile", profile]
+    arguments += ["-Action", "copy_final"]
     return subprocess.run(
-        [
-            "powershell.exe",
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            str(repository_root / "scripts" / "invoke.ps1"),
-            "-SettingsPath",
-            str(settings_path),
-            "-Profile",
-            "proofread",
-            "-Action",
-            "copy_final",
-        ],
+        arguments,
         cwd=repository_root,
         env=environment,
         check=False,
@@ -84,7 +89,10 @@ def _run_wrapper(
     )
 
 
-def test_wrapper_exposes_secret_only_to_the_selected_backend_tree(tmp_path: Path) -> None:
+@pytest.mark.parametrize("profile", [None, "alternate"])
+def test_wrapper_exposes_secret_only_to_the_selected_backend_tree(
+    tmp_path: Path, profile: str | None
+) -> None:
     repository_root = Path(__file__).parents[2]
     settings_path = tmp_path / "settings.json"
     secret_path = tmp_path / ".secrets" / "openai_token.txt"
@@ -97,12 +105,16 @@ def test_wrapper_exposes_secret_only_to_the_selected_backend_tree(tmp_path: Path
     _write_fake_uv(fake_bin / "uv.cmd")
     original_parent_value = os.environ.get(_API_KEY_ENV)
 
-    result = _run_wrapper(repository_root, settings_path, tmp_path, fake_bin, marker_path)
+    result = _run_wrapper(repository_root, settings_path, tmp_path, fake_bin, marker_path, profile)
 
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
     assert result.stdout.strip() == "backend-output"
     assert marker_path.read_text(encoding="utf-8").strip() == "backend-observed-key"
+    backend_arguments = marker_path.with_name("backend-args.txt").read_text(encoding="utf-8")
+    assert ("--profile" in backend_arguments) == (profile is not None)
+    if profile is not None:
+        assert f"--profile {profile}" in backend_arguments
     assert _SENTINEL not in output
     assert _SENTINEL not in " ".join(result.args)
     assert os.environ.get(_API_KEY_ENV) == original_parent_value

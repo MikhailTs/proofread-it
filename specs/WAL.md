@@ -1,42 +1,41 @@
-Updated: 2026-09-16T20:38:01Z
+Updated: 2026-09-17T10:36:50Z
 
-- WAL-Schema: `1`
-- Checkpoint-ID: `9aa59fc9-643e-4795-89c9-b535c61093ad`
-- Task: Protect proofreading invocations from parallel execution.
-- Active scope: The Project owner requested a shared AutoHotkey mutex for duplicate invocations across direct and `#Include` hosts. The local implementation, offline checks, Windows mutex process test, and acceptance instructions are complete; the owner reported that manual acceptance passed, the verified temporary #Include host was deleted, and a local commit is explicitly requested. No queueing, simultaneous requests, new dependency, unrelated MVP work, live API call, or push is authorized.
-- Authority: Project owner request on 2026-09-16 to add the mutex, following the discussion of separate AutoHotkey host processes, plus the owner requests in the current conversation to create and then delete the temporary AHK host and make a local commit after manual acceptance.
-- Authoritative spec: `spec://proofreader/DESKTOP-ASSISTANT#concurrency`, with dependencies `spec://proofreader/DESKTOP-ASSISTANT#architecture`, `spec://proofreader/DESKTOP-ASSISTANT#clipboard`, and `spec://proofreader/DESKTOP-ASSISTANT#testability`; observed spec SHA-256 `0bd561e289f1f83455b7ce52eb47d898ba9ead7eece172a19fb51cf59c04f98b`.
-- Issue: `NONE`
-- Assignment: `NONE`
-- Phase: `IN_PROGRESS`
+- WAL-Schema: 1
+- Checkpoint-ID: afa49789-03c0-49da-9943-ddf15733b371
+- Task: Use the configured default proofreading profile when an invocation omits a profile.
+- Active scope: Make profile selection optional for shipped AutoHotkey hotkeys, the per-invocation PowerShell wrapper, backend CLI, and pre-capture source-check CLI. Preserve explicit profile overrides. Update approved interaction/configuration anchors, tests, and desktop documentation. The project owner reports manual acceptance passed and has requested a local commit of the scoped diff. No additional profile, dependency, or push is in scope.
+- Authority: Project owner request on 2026-09-17 to address mandatory profile selection, the owner report in the current conversation on 2026-09-17 that manual verification passed, and the subsequent owner request to prepare a local commit.
+- Authoritative spec: spec://proofreader/DESKTOP-ASSISTANT#proofreading-profile and spec://proofreader/DESKTOP-ASSISTANT#product-workflow; changed anchors spec://proofreader/DESKTOP-ASSISTANT#configuration and spec://proofreader/DESKTOP-ASSISTANT#interaction. Observed edited specification SHA-256 7B9E11367E1FAB62E4E5123F130BE9DEEE427494D8F3197F13ECD1136BF2FFBE.
+- Issue: NONE
+- Assignment: NONE
+- Phase: IN_PROGRESS
 
 ## Constraints
 
-- Reject a duplicate AHK action before active-window observation, source check, selection capture, or clipboard mutation; do not queue it -> `spec://proofreader/DESKTOP-ASSISTANT#concurrency` and `spec://proofreader/DESKTOP-ASSISTANT#clipboard`.
-- Direct execution and every `#Include` host must share the same guard; Python retains its independent backend lock -> `spec://proofreader/DESKTOP-ASSISTANT#architecture` and `spec://proofreader/DESKTOP-ASSISTANT#concurrency`.
-- Preserve unrelated changes and use `uv`; commit and push require separate requests -> `AGENTS.md`.
+- Omitted profile uses settings.default_profile; explicit profile wins. Source-check and backend logging use the resolved name -> addressed spec anchors and owner request.
+- Preserve credential isolation, pre-capture source exclusion, and explicit custom AHK bindings -> spec://proofreader/DESKTOP-ASSISTANT#api-access, spec://proofreader/DESKTOP-ASSISTANT#context-policy, spec://proofreader/DESKTOP-ASSISTANT#interaction.
+- Use uv; preserve unrelated changes; the owner has requested this local commit, while push still requires a separate request -> AGENTS.md.
 
 ## Checkpoint and evidence basis
 
-- Repository/worktree/branch: `%USERPROFILE%/workspace/proofread-it`; `main`; HEAD `c3124ae33275ae35434e76071cb44d15d5da30b1`; no staged changes or merge/rebase observed. Expected unstaged paths excluding ACTIVE_WAL: `automation/windows/proofread-it.ahk`, `docs/development.md`, `docs/windows-acceptance.md`, `tests/windows/test_single_request.py`. Expected non-ignored untracked path: `tests/windows/test_ahk_invocation_mutex.py`.
-- Tracked task patch excluding ACTIVE_WAL: Git patch hash `a4538755c5df3c4223cf39e95a3c487ab8adbf25`; untracked test Git blob `6c08221122876c737f6eafb24160f104c977f0e2`. Pre-replacement ACTIVE_WAL SHA-256: `e037488eec4f8060c07a1a24a443d72ec6c1417ef285620f4684f10b559f8b28`. The prior committed concurrency task and its owner-reported acceptance are historical evidence, not acceptance of this change.
-- Relevant toolchain: repository-local `uv` environment, installed AutoHotkey v2 at `%USERPROFILE%/AppData/Local/Programs/AutoHotkey/v2/AutoHotkey64.exe`; no dependency change.
-- Temporary acceptance host: `%USERPROFILE%/AppData/Local/Temp/proofread-it-acceptance-371722846a1246df8ffe9fb1be25bac8.ahk`, previously SHA-256 `1f6b2bd79cbfaa2639b10b03cc25fd3bf43af5e3e8984bf7a0916157f891c131`, was deleted at 2026-09-16T20:37Z after confirming its resolved path stayed within the system temp directory and its SHA-256 still matched. `Test-Path -LiteralPath` -> `False`. AutoHotkey v2 `/Validate /ErrorStdOut=UTF-8` had exited `0` before owner acceptance.
+- Repository/worktree/branch: %USERPROFILE%/workspace/proofread-it; main; HEAD aaa69a0a5527ef0e0e4176bb05824e0ac9b485e5; origin/main aaac5d52c9cd3b8a5b0303e5a6bf5ce61efe5acd, branch ahead four. No staged or non-ignored untracked paths; no merge/rebase observed.
+- Expected unstaged paths excluding ACTIVE_WAL: automation/windows/proofread-it.ahk, docs/development.md, docs/windows-acceptance.md, scripts/invoke.ps1, specs/modules/proofreader/DESKTOP-ASSISTANT.md, src/proofread_it/cli.py, src/proofread_it/source_check.py, tests/component/test_app_invocation_wrapper.py, tests/component/test_cli_contract.py, tests/component/test_source_check.py, tests/windows/test_hotkeys.py. Revalidated Git patch fingerprint: git diff --binary -- . ':(exclude)specs/WAL.md' | git hash-object --stdin -> 21ec29d02d0b6598705b9f639245aeb2d6a72853 at 2026-09-17T10:19:50Z. Pre-replacement ACTIVE_WAL SHA-256: 5A12080A5F1D18CD6C64F0EBE8AFFAB775D0E39F971AA050449B8EEFF37DA6A1.
+- Relevant toolchain: repository-local uv environment and installed AutoHotkey v2 at %USERPROFILE%/AppData/Local/Programs/AutoHotkey/v2/AutoHotkey64.exe; pyproject.toml and uv.lock unchanged. The agent made no live API request or credential read.
 
 ## Boundaries
 
-- Specs: Existing approved `#concurrency` behavior covers early duplicate rejection; no semantic spec edit was made.
-- Code: AHK obtains `Local\ProofreadIt.Invocation` non-blockingly before observing the window, checking source policy, or capturing text. A busy mutex yields a short tooltip without taking focus. The local guard remains for repeated hotkeys within one AHK process. The mutex is released and its handle closed in `finally`, while the Python backend lock remains unchanged.
-- Tests: On the recorded implementation patch, `uv run --no-sync pytest -q` -> `130 passed, 2 deselected` at 2026-09-16T20:27Z. The new executable Windows test proves overlap rejection by a second included host, acquisition after termination of the owner, and acquisition after normal release. `uv run --no-sync ruff check .` -> passed; `uv run --no-sync mypy src` -> passed for 26 source files; AutoHotkey `/Validate /ErrorStdOut=UTF-8` -> exit `0`; `git diff --check` -> exit `0` with line-ending warnings only. The narrow mutex test was repeated after the final ReleaseMutex result check -> `4 passed`.
-- Human acceptance: The Project owner reported `Ручная проверка пройдена` in the current conversation on 2026-09-16 for the documented cross-host Windows scenario. This is owner-reported acceptance, not an independently captured screen, clipboard, or API trace; this agent made no live API request.
-- Risks / REVIEW: An already-running direct Python invocation, or a backend left running after its AHK host exits, can still reach AHK selection capture before the Python lock rejects it. The shared AHK mutex closes the separate-live-AHK-host gap but does not span those backend-only intervals. No semantic spec REVIEW is opened for the scoped mutex implementation.
+- Specs: Owner-authorized change applied to approved configuration and interaction anchors, with 2026-09-17 semantic changelog entry. Configured-default resolution was already required by the proofreading-profile and product-workflow anchors.
+- Code: Shipped hotkeys use InvokeDefault; existing explicit Invoke(profile, action) bindings remain supported. AHK omits profile flags for default invocations. Wrapper forwards -Profile only when supplied. Backend and source-check CLIs resolve omissions from settings.default_profile.
+- Automated verification on unchanged scoped patch: uv run --no-sync pytest -q tests/component/test_cli_contract.py tests/component/test_source_check.py tests/component/test_app_invocation_wrapper.py tests/windows/test_hotkeys.py -> 23 passed (2026-09-17); uv run --no-sync pytest -q -> 134 passed, 2 deselected (2026-09-17); uv run --no-sync ruff check . -> passed; uv run --no-sync mypy src -> passed for 26 source files; AutoHotkey64.exe /Validate /ErrorStdOut=UTF-8 automation/windows/proofread-it.ahk -> exit 0; git diff --check -> exit 0 with line-ending warnings only. Spec anchors were observed unique.
+- Human acceptance: Project owner reported "ручная проверка пройдена" in the current conversation on 2026-09-17 for the requested default-profile change. This is owner-reported semantic acceptance; no independent desktop trace or log was captured by the agent.
+- Risks / REVIEW: No blocking spec REVIEW or temporary code/spec divergence remains. Manual acceptance details are owner-reported rather than independently captured.
 
 ## Next action
 
-- Action: Stage only the scoped patch and create the owner-requested local commit with the full concurrency spec address.
-- First command: `git add -- automation/windows/proofread-it.ahk docs/development.md docs/windows-acceptance.md specs/WAL.md tests/windows/test_single_request.py tests/windows/test_ahk_invocation_mutex.py`.
-- Completion criterion: One local commit contains only the six scoped paths and `spec://proofreader/DESKTOP-ASSISTANT#concurrency` in its message; the temporary file stays absent and no push occurs.
+- Action: Stage only the 12 scoped paths and create the owner-requested local commit with the proposed message and full spec addresses.
+- First command: git add -- automation/windows/proofread-it.ahk docs/development.md docs/windows-acceptance.md scripts/invoke.ps1 specs/WAL.md specs/modules/proofreader/DESKTOP-ASSISTANT.md src/proofread_it/cli.py src/proofread_it/source_check.py tests/component/test_app_invocation_wrapper.py tests/component/test_cli_contract.py tests/component/test_source_check.py tests/windows/test_hotkeys.py
+- Completion criterion: One local commit contains exactly the 12 scoped paths and the full spec://proofreader/DESKTOP-ASSISTANT#configuration and spec://proofreader/DESKTOP-ASSISTANT#interaction addresses in its message; no push occurs.
 
-- Blockers: `NONE`
-- Pending decisions: `NONE` for the scoped mutex change; broader backend-only early exclusion remains outside this request.
-- Temporary code/spec divergence: `spec://proofreader/DESKTOP-ASSISTANT#concurrency` requires any active-request duplicate to avoid capture. Direct backend activity and an orphaned backend after AHK exit are not covered before capture by this AHK-only mutex; owner must authorize a shared frontend/backend coordinator if that full boundary is required.
+- Blockers: NONE
+- Pending decisions: NONE for this scoped change.
+- Temporary code/spec divergence: NONE

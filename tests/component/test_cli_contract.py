@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import pytest
 from pytest import CaptureFixture, MonkeyPatch
 
 from proofread_it.cli import main
@@ -162,6 +163,49 @@ def test_copy_final_writes_only_validated_text_to_stdout(
     assert captured.out == "She goes to the library."
     assert captured.err == ""
     assert shown_results == []
+
+
+@pytest.mark.parametrize(
+    ("requested_profile", "expected_profile"),
+    [(None, "alternate"), ("proofread", "proofread")],
+)
+def test_cli_uses_configured_default_unless_profile_is_explicit(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    requested_profile: str | None,
+    expected_profile: str,
+) -> None:
+    settings_path = _write_config(tmp_path)
+    settings = json.loads(settings_path.read_text(encoding="utf-8"))
+    settings["default_profile"] = "alternate"
+    settings_path.write_text(json.dumps(settings), encoding="utf-8")
+    profiles_path = settings_path.with_name("profiles.json")
+    profiles = json.loads(profiles_path.read_text(encoding="utf-8"))
+    profiles["profiles"]["alternate"] = {
+        "task": "proofread_english",
+        "instructions": "Alternate profile instructions.",
+        "context_fields": [],
+    }
+    profiles_path.write_text(json.dumps(profiles), encoding="utf-8")
+    provider = _FakeProvider()
+    _connect_fake_provider(monkeypatch, provider)
+    monkeypatch.setenv("PROOFREAD_IT_SOURCE_TEXT", "She go to the library.")
+    monkeypatch.setenv("OPENAI_API_KEY", _SENTINEL_KEY)
+
+    arguments = ["--settings", str(settings_path), "--action", "copy_final"]
+    if requested_profile is not None:
+        arguments += ["--profile", requested_profile]
+    exit_code = main(arguments)
+
+    event = json.loads((tmp_path / "events.jsonl").read_text(encoding="utf-8"))
+    assert exit_code == 0
+    assert len(provider.requests) == 1
+    assert event["profile"] == expected_profile
+    assert provider.requests[0]["parts"][0]["text"] == (
+        "Alternate profile instructions."
+        if expected_profile == "alternate"
+        else "Proofread the selected text."
+    )
 
 
 def test_missing_credential_fails_before_constructing_the_provider(

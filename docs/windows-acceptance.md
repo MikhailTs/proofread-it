@@ -27,9 +27,10 @@ using the model and limits in `config/settings.json`.
 10. With no text selected, press either hotkey and confirm the concise error is shown and no log event
    is appended.
 
-The first event must contain profile `proofread`, action `show_full`, the exact selected text, the
-focused window's process name and title, successful API diagnostics, and the normalized result. The
-result window must show both result fields and remain readable when resized. After `show_full`, the
+The first event must contain profile `proofread` (selected through `settings.default_profile`),
+action `show_full`, the exact selected text, the focused window's process name and title, successful
+API diagnostics, and the normalized result. The result window must show both result fields and
+remain readable when resized. After `show_full`, the
 clipboard content from before invocation must be restored. The second event must contain action
 `copy_final`, its exact selection, successful API diagnostics, and the normalized result; after that
 invocation, the clipboard must contain only its normalized `final_text`.
@@ -52,7 +53,8 @@ invocation, the clipboard must contain only its normalized `final_text`.
 These checks exercise both action hotkeys and the lifecycle around success and failure. A separate
 host loaded through `#Include` also shares the AutoHotkey invocation mutex. To verify this boundary,
 keep the direct script running and start a temporary host with the same `#Include` plus a distinct
-test binding such as `^!q::Invoke("proofread", "copy_final")`. While the direct host handles a request,
+test binding such as `^!q::Invoke("proofread", "copy_final")` to exercise an explicit profile
+override. While the direct host handles a request,
 press `Ctrl+Alt+Q`. Confirm the temporary host shows the in-progress tooltip without changing the
 active window, copying a selection, changing the clipboard, or sending another API request. After
 the first action ends, the temporary host must accept a new invocation. The offline test

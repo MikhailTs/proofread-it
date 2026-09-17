@@ -3,11 +3,13 @@
 from pathlib import Path
 
 
-def test_default_hotkeys_route_profile_and_action_to_backend() -> None:
+def test_default_hotkeys_route_action_and_allow_profile_override() -> None:
     script = Path("automation/windows/proofread-it.ahk").read_text(encoding="utf-8")
 
-    assert '^!e::Invoke("proofread", "show_full")' in script
-    assert '^!+e::Invoke("proofread", "copy_final")' in script
+    assert '^!e::InvokeDefault("show_full")' in script
+    assert '^!+e::InvokeDefault("copy_final")' in script
+    assert 'Invoke("", action)' in script
+    assert 'profileOption := profile = "" ? ""' in script
     assert "scripts\\invoke.ps1" in script
     assert "powershell.exe -NoProfile -NonInteractive" in script
     assert "PROOFREAD_IT_SOURCE_PROCESS_NAME" in script

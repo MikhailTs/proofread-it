@@ -2,7 +2,6 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$SettingsPath,
-    [Parameter(Mandatory = $true)]
     [string]$Profile,
     [Parameter(Mandatory = $true)]
     [ValidateSet("show_full", "copy_final")]
@@ -45,12 +44,14 @@ if ([string]::IsNullOrWhiteSpace($apiKey)) {
 
 $previousApiKey = [Environment]::GetEnvironmentVariable($apiKeyEnv, "Process")
 $backendExitCode = 1
+$backendArguments = @("--settings", $resolvedSettingsPath)
+if ($PSBoundParameters.ContainsKey("Profile")) {
+    $backendArguments += @("--profile", $Profile)
+}
+$backendArguments += @("--action", $Action)
 try {
     [Environment]::SetEnvironmentVariable($apiKeyEnv, $apiKey, "Process")
-    & uv run --project $projectRoot --no-sync proofread-it `
-        --settings $resolvedSettingsPath `
-        --profile $Profile `
-        --action $Action
+    & uv run --project $projectRoot --no-sync proofread-it @backendArguments
     $backendExitCode = $LASTEXITCODE
 } finally {
     [Environment]::SetEnvironmentVariable($apiKeyEnv, $previousApiKey, "Process")

@@ -53,7 +53,7 @@ def blocked_message(match: ExclusionMatch) -> str:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="proofread-it-source-check")
     parser.add_argument("--settings", required=True, type=Path)
-    parser.add_argument("--profile", required=True)
+    parser.add_argument("--profile")
     parser.add_argument("--action", required=True, choices=("show_full", "copy_final"))
     return parser
 
@@ -65,7 +65,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         settings = load_settings(options.settings)
         match = check_current_source(
             settings,
-            profile=options.profile,
+            profile=options.profile if options.profile is not None else settings.default_profile,
             action=options.action,
         )
     except (ConfigurationError, OSError) as error:

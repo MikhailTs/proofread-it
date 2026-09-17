@@ -8,9 +8,13 @@ InvokeScriptPath := ProjectRoot "\scripts\invoke.ps1"
 SourceCheckCommand := 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -Command uv run --project "' ProjectRoot '" --no-sync python -m proofread_it.source_check'
 
 #MaxThreadsPerHotkey 2
-^!e::Invoke("proofread", "show_full")
-^!+e::Invoke("proofread", "copy_final")
+^!e::InvokeDefault("show_full")
+^!+e::InvokeDefault("copy_final")
 #MaxThreadsPerHotkey 1
+
+InvokeDefault(action) {
+    Invoke("", action)
+}
 
 Invoke(profile, action) {
     static invocationActive := false
@@ -35,11 +39,12 @@ Invoke(profile, action) {
 
         EnvSet("PROOFREAD_IT_SOURCE_PROCESS_NAME", processName)
         EnvSet("PROOFREAD_IT_SOURCE_WINDOW_TITLE", windowTitle)
+        profileOption := profile = "" ? "" : ' --profile "' profile '"'
         policyCommand := Format(
-            '{1} --settings "{2}" --profile "{3}" --action "{4}"',
+            '{1} --settings "{2}"{3} --action "{4}"',
             SourceCheckCommand,
             SettingsPath,
-            profile,
+            profileOption,
             action
         )
         policyExitCode := RunCaptured(policyCommand, &policyOutput, &policyError)
@@ -71,11 +76,12 @@ Invoke(profile, action) {
         }
         EnvSet("PROOFREAD_IT_SOURCE_TEXT", selectedText)
 
+        profileOption := profile = "" ? "" : ' -Profile "' profile '"'
         command := Format(
-            'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "{1}" -SettingsPath "{2}" -Profile "{3}" -Action "{4}"',
+            'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "{1}" -SettingsPath "{2}"{3} -Action "{4}"',
             InvokeScriptPath,
             SettingsPath,
-            profile,
+            profileOption,
             action
         )
         exitCode := RunCaptured(command, &correctedText, &errorText)
