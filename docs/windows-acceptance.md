@@ -19,12 +19,17 @@ using the model and limits in `config/settings.json`.
 5. In another application, select non-empty multiline text containing non-ASCII characters, but do
    not copy it manually.
 6. Press `Ctrl+Alt+E`. Confirm a `Proofread It` window opens with corrections under `Explanation`
-   and the complete corrected text under `Result`, then close it. No helper terminal should appear,
-   receive focus, or trigger an active-window-changed notification.
-7. Inspect the last JSON line in `logs/proofread-it.jsonl`.
-8. Paste into a scratch editor and confirm the original clipboard sentinel is pasted.
-9. Repeat with `Ctrl+Alt+Shift+E`, then inspect the new last JSON line.
-10. With no text selected, press either hotkey and confirm the concise error is shown and no log event
+   and the complete corrected text under `Result`. No helper terminal should appear, receive focus,
+   or trigger an active-window-changed notification.
+7. Before copying from the result window, paste into a scratch editor and confirm the original
+   clipboard sentinel is pasted.
+8. Return to the result window, select part of either text field, press `Ctrl+C`, and confirm that
+   exact selection can be pasted. Press `Ctrl+A` in the `Result` field and confirm `Ctrl+C` copies
+   its complete text.
+9. Click `Copy result` and confirm the complete corrected text can be pasted, then close the window.
+10. Inspect the last JSON line in `logs/proofread-it.jsonl`.
+11. Repeat with `Ctrl+Alt+Shift+E`, then inspect the new last JSON line.
+12. With no text selected, press either hotkey and confirm the concise error is shown and no log event
    is appended.
 
 The first event must contain profile `proofread` (selected through `settings.default_profile`),
