@@ -64,15 +64,16 @@ def test_policy_and_backend_processes_cannot_show_a_focus_stealing_console() -> 
 
     hidden_prefix = "powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden"
 
-    assert script.count(hidden_prefix) == 2
+    assert script.count(hidden_prefix) == 3
     assert "-Command uv run --project" in script
+    assert "python -m proofread_it.invocation_failure" in script
     assert "-ExecutionPolicy Bypass -File" in script
 
 
 def test_child_process_wait_allows_duplicate_hotkey_threads_to_run_immediately() -> None:
     script = Path("automation/windows/proofread-it.ahk").read_text(encoding="utf-8")
 
-    assert script.count("RunCaptured(") == 3
+    assert script.count("RunCaptured(") == 4
     assert 'RunWait(target, , "Hide")' in script
     assert 'ComObject("WScript.Shell").Exec' not in script
     assert ".StdOut.ReadAll()" not in script

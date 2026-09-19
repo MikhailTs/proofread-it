@@ -11,6 +11,7 @@ from proofread_it.config.loader import ConfigurationError, load_settings
 from proofread_it.config.schemas import Settings
 from proofread_it.context.normalize import normalize_source_context
 from proofread_it.context.policy import ExclusionMatch, find_source_exclusion
+from proofread_it.invocation_failure import log_preflight_failure
 
 BLOCKED_EXIT_CODE = 10
 _SOURCE_PROCESS_NAME = "PROOFREAD_IT_SOURCE_PROCESS_NAME"
@@ -68,7 +69,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             profile=options.profile if options.profile is not None else settings.default_profile,
             action=options.action,
         )
-    except (ConfigurationError, OSError) as error:
+    except ConfigurationError as error:
+        log_preflight_failure(
+            options.settings,
+            profile_name=options.profile,
+            action=options.action,
+            stage="configuration",
+            error=error,
+            include_source_text=False,
+        )
+        print(str(error), file=sys.stderr)
+        return 1
+    except OSError as error:
         print(str(error), file=sys.stderr)
         return 1
 

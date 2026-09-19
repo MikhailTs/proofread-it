@@ -142,10 +142,18 @@ class OpenAIProvider:
                 text=response_format,
             )
         except OpenAIError as error:
-            raise _translate_error(error) from error
+            translated = _translate_error(error)
+            translated.diagnostics = _safe_diagnostics(error)
+            raise translated from error
 
         if response.error is not None:
-            raise _translate_response_error(response.error.code)
+            translated = _translate_response_error(response.error.code)
+            translated.diagnostics = {
+                "provider_code": response.error.code,
+                "response_status": response.status,
+                "response_id": response.id,
+            }
+            raise translated
 
         return ProviderResponse(
             response_id=response.id,
@@ -235,3 +243,16 @@ def _translate_response_error(code: str) -> ProviderError:
     if code == "server_error":
         return ProviderServerError("The model service is temporarily unavailable.")
     return ProviderRequestError("The model service rejected the request.")
+
+
+def _safe_diagnostics(error: OpenAIError) -> dict[str, object]:
+    """Retain bounded provider identifiers without raw headers, bodies, or messages."""
+    details: dict[str, object] = {"provider_error_type": type(error).__name__}
+    if isinstance(error, APIStatusError):
+        details["http_status"] = error.status_code
+        if isinstance(error.code, str):
+            details["provider_code"] = error.code
+        request_id = getattr(error, "request_id", None)
+        if isinstance(request_id, str):
+            details["request_id"] = request_id
+    return details

@@ -6,6 +6,7 @@ ProjectRoot := AutomationDir "\..\.."
 SettingsPath := ProjectRoot "\config\settings.json"
 InvokeScriptPath := ProjectRoot "\scripts\invoke.ps1"
 SourceCheckCommand := 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -Command uv run --project "' ProjectRoot '" --no-sync python -m proofread_it.source_check'
+FailureLogCommand := 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -Command uv run --project "' ProjectRoot '" --no-sync python -m proofread_it.invocation_failure'
 
 #MaxThreadsPerHotkey 2
 ^!e::InvokeDefault("show_full")
@@ -65,12 +66,14 @@ Invoke(profile, action) {
             || currentProcessName != processName
             || currentWindowTitle != windowTitle
         ) {
+            LogPreflightFailure(profile, action, "source_changed")
             MsgBox("The active window changed. Select the text and try again.", "Proofread It", "Icon!")
             return
         }
 
         selectedText := CaptureSelectedText()
         if (selectedText = "") {
+            LogPreflightFailure(profile, action, "no_selection")
             MsgBox("No selected text was detected.", "Proofread It", "Icon!")
             return
         }
@@ -110,6 +113,24 @@ Invoke(profile, action) {
                 invocationActive := false
             }
         }
+    }
+}
+
+LogPreflightFailure(profile, action, reason) {
+    global FailureLogCommand, SettingsPath
+    profileOption := profile = "" ? "" : ' --profile "' profile '"'
+    command := Format(
+        '{1} --settings "{2}"{3} --action "{4}" --reason "{5}"',
+        FailureLogCommand,
+        SettingsPath,
+        profileOption,
+        action,
+        reason
+    )
+    try {
+        RunCaptured(command, &ignoredOutput, &ignoredError)
+    } catch {
+        ; The original preflight notification still takes precedence.
     }
 }
 

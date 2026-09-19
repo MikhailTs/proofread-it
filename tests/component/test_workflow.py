@@ -194,6 +194,38 @@ def test_logs_a_credential_safe_provider_failure(tmp_path: Path) -> None:
     assert "Bearer [REDACTED]" in raw_log
 
 
+def test_logs_safe_provider_diagnostics_without_raw_provider_message(tmp_path: Path) -> None:
+    log_path = tmp_path / "events.jsonl"
+    provider = _FakeProvider(
+        error=ProviderServerError(
+            "The model service is temporarily unavailable.",
+            diagnostics={
+                "provider_error_type": "InternalServerError",
+                "http_status": 500,
+                "provider_code": "server_error",
+            },
+        )
+    )
+
+    with pytest.raises(ProviderServerError):
+        run_workflow(
+            settings=_settings(log_path),
+            profile=_profile(),
+            provider=provider,
+            action="show_full",
+            selected_text="Text",
+            source_process_name="editor.exe",
+            source_window_title="Draft",
+        )
+
+    event = _event(log_path)
+    assert event["error"]["diagnostics"] == {
+        "provider_error_type": "InternalServerError",
+        "http_status": 500,
+        "provider_code": "server_error",
+    }
+
+
 def test_logs_retry_events_observed_during_the_provider_call(tmp_path: Path) -> None:
     log_path = tmp_path / "events.jsonl"
     retry_events: list[RetryEvent] = []

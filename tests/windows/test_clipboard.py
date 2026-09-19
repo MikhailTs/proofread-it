@@ -45,6 +45,16 @@ def test_changed_active_window_returns_before_clipboard_capture() -> None:
     assert stability_guard < retry_message < clipboard_capture
 
 
+def test_pre_capture_failures_are_logged_without_selected_text() -> None:
+    script = Path("automation/windows/proofread-it.ahk").read_text(encoding="utf-8")
+
+    source_changed = script.index('LogPreflightFailure(profile, action, "source_changed")')
+    selection_empty = script.index('LogPreflightFailure(profile, action, "no_selection")')
+    backend_run = script.index("RunCaptured(command, &correctedText")
+    assert source_changed < selection_empty < backend_run
+    assert 'EnvSet("PROOFREAD_IT_SOURCE_TEXT", selectedText)' in script[selection_empty:backend_run]
+
+
 def test_copy_final_uses_only_successful_backend_stdout() -> None:
     script = Path("automation/windows/proofread-it.ahk").read_text(encoding="utf-8")
 

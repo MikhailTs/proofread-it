@@ -59,7 +59,9 @@ Responses API, validates the returned corrections and final text, and performs t
 If copying does not produce text within one second, the backend is not started and a concise error is
 shown.
 
-Every completed or failed API invocation is appended to `logs/proofread-it.jsonl`. The event contains
+Every completed or failed API invocation is appended to `logs/proofread-it.jsonl`. Failures before an
+API request, including missing development credentials and an empty selection, are also recorded
+when the configured log path can be read. The event contains
 the selected text and source context, complete logical request, request duration, API status, model
 output, raw API response, normalized result, SDK retry observations, or safe error detail. Each item
 in `retry_events` identifies the one-based retry number and whether it followed an HTTP response

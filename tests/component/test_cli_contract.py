@@ -214,6 +214,7 @@ def test_missing_credential_fails_before_constructing_the_provider(
     capsys: CaptureFixture[str],
 ) -> None:
     settings_path = _write_config(tmp_path)
+    monkeypatch.setenv("PROOFREAD_IT_SOURCE_TEXT", "She go to the library.")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     constructed = False
 
@@ -240,6 +241,53 @@ def test_missing_credential_fails_before_constructing_the_provider(
     assert not constructed
     assert "OPENAI_API_KEY" in captured.err
     assert _SENTINEL_KEY not in captured.err
+    event = json.loads((tmp_path / "events.jsonl").read_text(encoding="utf-8"))
+    assert event["event"] == "invocation_failed"
+    assert event["stage"] == "credential"
+    assert event["source_text"] == "She go to the library."
+    assert event["logical_request"] is None
+    assert event["error"]["type"] == "CredentialError"
+
+
+def test_empty_selection_is_logged_without_reading_the_credential(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    capsys: CaptureFixture[str],
+) -> None:
+    settings_path = _write_config(tmp_path)
+    monkeypatch.delenv("PROOFREAD_IT_SOURCE_TEXT", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    exit_code = main(["--settings", str(settings_path), "--action", "copy_final"])
+
+    captured = capsys.readouterr()
+    event = json.loads((tmp_path / "events.jsonl").read_text(encoding="utf-8"))
+    assert exit_code == 1
+    assert "No selected text" in captured.err
+    assert event["stage"] == "selection"
+    assert event["profile"] == "proofread"
+    assert event["source_text"] is None
+    assert event["api"] is None
+
+
+def test_invalid_profile_is_logged_before_credential_access(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    settings_path = _write_config(tmp_path)
+    monkeypatch.setenv("PROOFREAD_IT_SOURCE_TEXT", "Draft text")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    exit_code = main(
+        ["--settings", str(settings_path), "--profile", "missing", "--action", "show_full"]
+    )
+
+    event = json.loads((tmp_path / "events.jsonl").read_text(encoding="utf-8"))
+    assert exit_code == 1
+    assert event["stage"] == "profile"
+    assert event["profile"] == "missing"
+    assert event["source_text"] == "Draft text"
+    assert event["error"]["type"] == "ConfigurationError"
 
 
 def test_excluded_source_fails_before_reading_credentials_or_constructing_provider(

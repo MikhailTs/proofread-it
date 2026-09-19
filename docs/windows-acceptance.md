@@ -29,8 +29,8 @@ using the model and limits in `config/settings.json`.
 9. Click `Copy result` and confirm the complete corrected text can be pasted, then close the window.
 10. Inspect the last JSON line in `logs/proofread-it.jsonl`.
 11. Repeat with `Ctrl+Alt+Shift+E`, then inspect the new last JSON line.
-12. With no text selected, press either hotkey and confirm the concise error is shown and no log event
-   is appended.
+12. With no text selected, press either hotkey and confirm the concise error is shown and exactly
+    one `invocation_failed` event is appended with stage `selection`, no source text, and no API data.
 
 The first event must contain profile `proofread` (selected through `settings.default_profile`),
 action `show_full`, the exact selected text, the focused window's process name and title, successful

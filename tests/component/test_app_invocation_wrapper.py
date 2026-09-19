@@ -39,6 +39,10 @@ def _write_settings(path: Path) -> None:
 def _write_fake_uv(path: Path) -> None:
     path.write_text(
         f"""@echo off
+if "%~7"=="proofread_it.invocation_failure" (
+> "%PROOFREAD_IT_LOG_MARKER%" echo failure-logger-ran
+exit /b 0
+)
 if not \"%{_API_KEY_ENV}%\"==\"{_SENTINEL}\" exit /b 41
 > \"%PROOFREAD_IT_BACKEND_MARKER%\" echo backend-observed-key
 > \"%PROOFREAD_IT_BACKEND_ARGS_MARKER%\" echo %*
@@ -63,6 +67,7 @@ def _run_wrapper(
     environment["PROOFREAD_IT_BACKEND_ARGS_MARKER"] = str(
         marker_path.with_name("backend-args.txt")
     )
+    environment["PROOFREAD_IT_LOG_MARKER"] = str(marker_path.with_name("failure-log.txt"))
     environment["PATH"] = f"{fake_bin}{os.pathsep}{environment['PATH']}"
     environment.pop(_API_KEY_ENV, None)
     arguments = [
@@ -144,6 +149,9 @@ def test_wrapper_fails_before_backend_when_secret_file_is_unusable(
     output = result.stdout + result.stderr
     assert result.returncode != 0
     assert not marker_path.exists()
+    assert marker_path.with_name("failure-log.txt").read_text(encoding="utf-8").strip() == (
+        "failure-logger-ran"
+    )
     assert _SENTINEL not in output
 
 
@@ -154,5 +162,40 @@ def test_wrapper_never_targets_persistent_environment_scopes_or_arguments() -> N
     assert 'SetEnvironmentVariable($apiKeyEnv, $previousApiKey, "Process")' in wrapper
     assert '"User"' not in wrapper
     assert '"Machine"' not in wrapper
-    backend_command = wrapper[wrapper.index("& uv") : wrapper.index("} finally")]
+    backend_start = wrapper.index("& uv run --project")
+    backend_command = wrapper[backend_start : wrapper.index("} finally", backend_start)]
     assert "$apiKey" not in backend_command
+
+
+def test_missing_secret_is_logged_by_the_real_failure_helper(tmp_path: Path) -> None:
+    repository_root = Path(__file__).parents[2]
+    settings_path = tmp_path / "settings.json"
+    _write_settings(settings_path)
+    environment = os.environ.copy()
+    environment["USERPROFILE"] = str(tmp_path)
+    environment["PROOFREAD_IT_SOURCE_TEXT"] = "Captured draft"
+    environment.pop(_API_KEY_ENV, None)
+
+    result = subprocess.run(
+        [
+            "powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+            "-File", str(repository_root / "scripts" / "invoke.ps1"),
+            "-SettingsPath", str(settings_path), "-Action", "copy_final",
+        ],
+        cwd=repository_root,
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    log_path = tmp_path / "events.jsonl"
+    assert log_path.exists(), result.stdout + result.stderr
+    raw_log = log_path.read_text(encoding="utf-8")
+    event = json.loads(raw_log)
+    assert result.returncode != 0
+    assert event["event"] == "invocation_failed"
+    assert event["stage"] == "credential"
+    assert event["source_text"] == "Captured draft"
+    assert event["logical_request"] is None
+    assert _SENTINEL not in raw_log + result.stdout + result.stderr

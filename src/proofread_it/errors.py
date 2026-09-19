@@ -4,6 +4,10 @@
 class ProviderError(RuntimeError):
     """Base class for model-provider failures safe to show to a user."""
 
+    def __init__(self, message: str, *, diagnostics: dict[str, object] | None = None) -> None:
+        super().__init__(message)
+        self.diagnostics = diagnostics or {}
+
 
 class ProviderAuthenticationError(ProviderError):
     """The provider rejected the configured credential or its permissions."""

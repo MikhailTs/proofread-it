@@ -110,3 +110,23 @@ def test_allowed_source_returns_success_without_creating_a_log(
 
     assert exit_code == 0
     assert not (tmp_path / "events.jsonl").exists()
+
+
+def test_invalid_settings_are_logged_when_the_log_path_is_recoverable(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    settings_path = tmp_path / "settings.json"
+    _write_settings(settings_path)
+    payload = json.loads(settings_path.read_text(encoding="utf-8"))
+    payload["api"]["timeout_seconds"] = 0
+    settings_path.write_text(json.dumps(payload), encoding="utf-8")
+    monkeypatch.setenv("PROOFREAD_IT_SOURCE_TEXT", "not-yet-captured")
+
+    exit_code = main(["--settings", str(settings_path), "--action", "show_full"])
+
+    event = json.loads((tmp_path / "events.jsonl").read_text(encoding="utf-8"))
+    assert exit_code == 1
+    assert event["stage"] == "configuration"
+    assert event["source_text"] is None
+    assert "timeout_seconds" in event["error"]["detail"]

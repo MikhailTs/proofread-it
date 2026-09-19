@@ -8,6 +8,7 @@ import httpx2
 import pytest
 from openai import (
     APIConnectionError,
+    APIStatusError,
     APITimeoutError,
     AuthenticationError,
     BadRequestError,
@@ -245,6 +246,12 @@ def test_translates_sdk_errors_without_exposing_provider_details(
         provider.send(_request())
 
     assert _SENTINEL_KEY not in str(captured.value)
+    diagnostics = captured.value.diagnostics
+    assert diagnostics["provider_error_type"] == type(sdk_error).__name__
+    if isinstance(sdk_error, APIStatusError):
+        assert diagnostics["http_status"] == sdk_error.status_code
+        assert diagnostics["provider_code"] == sdk_error.code
+    assert _SENTINEL_KEY not in repr(diagnostics)
 
 
 def test_rejects_an_invalid_logical_envelope_before_calling_the_sdk() -> None:
