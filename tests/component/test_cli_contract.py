@@ -22,6 +22,7 @@ _SENTINEL_KEY = "cli-sentinel-key-must-not-appear"
 
 @dataclass
 class _FakeProvider:
+    final_text: str = "She goes to the library."
     requests: list[LogicalRequest] = field(default_factory=list)
 
     def send(self, request: LogicalRequest) -> ProviderResponse:
@@ -30,9 +31,9 @@ class _FakeProvider:
             response_id="resp_cli",
             model="gpt-5.6-luna",
             api_status="completed",
-            output_text=(
-                '{"corrections":["Fix agreement."],'
-                '"final_text":"She goes to the library."}'
+            output_text=json.dumps(
+                {"corrections": ["Fix agreement."], "final_text": self.final_text},
+                ensure_ascii=False,
             ),
             raw_response={"id": "resp_cli", "status": "completed"},
         )
@@ -137,10 +138,11 @@ def test_cli_sends_captured_text_and_shows_the_validated_result(
 def test_copy_final_writes_only_validated_text_to_stdout(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
-    capsys: CaptureFixture[str],
+    capfdbinary: CaptureFixture[bytes],
 ) -> None:
     settings_path = _write_config(tmp_path)
-    provider = _FakeProvider()
+    final_text = "I received the café menu.\r\nIt looks great — thanks!"
+    provider = _FakeProvider(final_text=final_text)
     _connect_fake_provider(monkeypatch, provider)
     monkeypatch.setenv("PROOFREAD_IT_SOURCE_TEXT", "She go to the library.")
     monkeypatch.setenv("OPENAI_API_KEY", _SENTINEL_KEY)
@@ -158,10 +160,10 @@ def test_copy_final_writes_only_validated_text_to_stdout(
         ]
     )
 
-    captured = capsys.readouterr()
+    captured = capfdbinary.readouterr()
     assert exit_code == 0
-    assert captured.out == "She goes to the library."
-    assert captured.err == ""
+    assert captured.out == final_text.encode("utf-8")
+    assert captured.err == b""
     assert shown_results == []
 
 

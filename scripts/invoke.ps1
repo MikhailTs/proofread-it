@@ -9,6 +9,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$utf8Encoding = New-Object System.Text.UTF8Encoding($false)
+[Console]::OutputEncoding = $utf8Encoding
+$OutputEncoding = $utf8Encoding
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $resolvedSettingsPath = [System.IO.Path]::GetFullPath($SettingsPath)
 $hasRequestedProfile = $PSBoundParameters.ContainsKey("Profile")
@@ -72,6 +75,8 @@ if ([string]::IsNullOrWhiteSpace($apiKey)) {
 }
 
 $previousApiKey = [Environment]::GetEnvironmentVariable($apiKeyEnv, "Process")
+$pythonIoEncodingEnv = "PYTHONIOENCODING"
+$previousPythonIoEncoding = [Environment]::GetEnvironmentVariable($pythonIoEncodingEnv, "Process")
 $backendExitCode = 1
 $backendArguments = @("--settings", $resolvedSettingsPath)
 if ($PSBoundParameters.ContainsKey("Profile")) {
@@ -80,10 +85,16 @@ if ($PSBoundParameters.ContainsKey("Profile")) {
 $backendArguments += @("--action", $Action)
 try {
     [Environment]::SetEnvironmentVariable($apiKeyEnv, $apiKey, "Process")
+    [Environment]::SetEnvironmentVariable($pythonIoEncodingEnv, "utf-8", "Process")
     & uv run --project $projectRoot --no-sync proofread-it @backendArguments
     $backendExitCode = $LASTEXITCODE
 } finally {
     [Environment]::SetEnvironmentVariable($apiKeyEnv, $previousApiKey, "Process")
+    [Environment]::SetEnvironmentVariable(
+        $pythonIoEncodingEnv,
+        $previousPythonIoEncoding,
+        "Process"
+    )
     Remove-Variable apiKey -ErrorAction SilentlyContinue
 }
 

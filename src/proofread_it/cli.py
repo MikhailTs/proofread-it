@@ -90,7 +90,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             if options.action == "show_full":
                 show_result(explanations=result.corrections, final_text=result.final_text)
             else:
-                sys.stdout.write(result.final_text)
+                sys.stdout.buffer.write(result.final_text.encode("utf-8"))
     except ConcurrentInvocationError as error:
         print(str(error), file=sys.stderr)
         return CONCURRENT_EXIT_CODE

@@ -97,7 +97,7 @@ Invoke(profile, action) {
             return
         }
         if (action = "copy_final") {
-            A_Clipboard := correctedText
+            CopyFinalToClipboard(correctedText)
         }
     } finally {
         try {
@@ -114,6 +114,13 @@ Invoke(profile, action) {
             }
         }
     }
+}
+
+CopyFinalToClipboard(text) {
+    normalizedText := StrReplace(text, "`r`n", "`n")
+    normalizedText := StrReplace(normalizedText, "`r", "`n")
+    windowsText := StrReplace(normalizedText, "`n", "`r`n")
+    A_Clipboard := windowsText
 }
 
 LogPreflightFailure(profile, action, reason) {
@@ -179,8 +186,8 @@ RunCaptured(command, &standardOutput, &standardError) {
     try {
         target := A_ComSpec ' /D /C ' command ' > "' outputPath '" 2> "' errorPath '"'
         exitCode := RunWait(target, , "Hide")
-        standardOutput := FileExist(outputPath) ? FileRead(outputPath) : ""
-        standardError := FileExist(errorPath) ? FileRead(errorPath) : ""
+        standardOutput := FileExist(outputPath) ? FileRead(outputPath, "UTF-8") : ""
+        standardError := FileExist(errorPath) ? FileRead(errorPath, "UTF-8") : ""
         return exitCode
     } finally {
         if FileExist(outputPath) {

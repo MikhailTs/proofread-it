@@ -3,6 +3,7 @@
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -53,6 +54,18 @@ exit /b 0
     )
 
 
+def _write_unicode_fake_uv(path: Path) -> None:
+    path.write_text(
+        f"""@echo off
+if not \"%{_API_KEY_ENV}%\"==\"{_SENTINEL}\" exit /b 41
+if not \"%PYTHONIOENCODING%\"==\"utf-8\" exit /b 42
+\"%PROOFREAD_IT_TEST_PYTHON%\" -c "%PROOFREAD_IT_UNICODE_PROBE%"
+exit /b %ERRORLEVEL%
+""",
+        encoding="utf-8",
+    )
+
+
 def _run_wrapper(
     repository_root: Path,
     settings_path: Path,
@@ -68,6 +81,11 @@ def _run_wrapper(
         marker_path.with_name("backend-args.txt")
     )
     environment["PROOFREAD_IT_LOG_MARKER"] = str(marker_path.with_name("failure-log.txt"))
+    environment["PROOFREAD_IT_TEST_PYTHON"] = sys.executable
+    environment["PROOFREAD_IT_UNICODE_PROBE"] = (
+        "import sys; sys.stdout.buffer.write(('I received the caf' + chr(233) + ' menu.' "
+        "+ chr(13) + chr(10) + 'It looks great ' + chr(8212) + ' thanks!').encode('utf-8'))"
+    )
     environment["PATH"] = f"{fake_bin}{os.pathsep}{environment['PATH']}"
     environment.pop(_API_KEY_ENV, None)
     arguments = [
@@ -90,7 +108,7 @@ def _run_wrapper(
         env=environment,
         check=False,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
     )
 
 
@@ -160,11 +178,32 @@ def test_wrapper_never_targets_persistent_environment_scopes_or_arguments() -> N
 
     assert 'SetEnvironmentVariable($apiKeyEnv, $apiKey, "Process")' in wrapper
     assert 'SetEnvironmentVariable($apiKeyEnv, $previousApiKey, "Process")' in wrapper
+    assert 'SetEnvironmentVariable($pythonIoEncodingEnv, "utf-8", "Process")' in wrapper
+    assert "$previousPythonIoEncoding" in wrapper
     assert '"User"' not in wrapper
     assert '"Machine"' not in wrapper
     backend_start = wrapper.index("& uv run --project")
     backend_command = wrapper[backend_start : wrapper.index("} finally", backend_start)]
     assert "$apiKey" not in backend_command
+
+
+def test_wrapper_round_trips_unicode_backend_output_as_utf8(tmp_path: Path) -> None:
+    repository_root = Path(__file__).parents[2]
+    settings_path = tmp_path / "settings.json"
+    secret_path = tmp_path / ".secrets" / "openai_token.txt"
+    fake_bin = tmp_path / "bin"
+    marker_path = tmp_path / "backend-ran.txt"
+    secret_path.parent.mkdir()
+    fake_bin.mkdir()
+    secret_path.write_text(_SENTINEL, encoding="utf-8")
+    _write_settings(settings_path)
+    _write_unicode_fake_uv(fake_bin / "uv.cmd")
+
+    result = _run_wrapper(repository_root, settings_path, tmp_path, fake_bin, marker_path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout == "I received the café menu.\nIt looks great — thanks!"
+    assert result.stderr == ""
 
 
 def test_missing_secret_is_logged_by_the_real_failure_helper(tmp_path: Path) -> None:
