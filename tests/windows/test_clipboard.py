@@ -310,3 +310,96 @@ def test_full_wrapper_capture_and_clipboard_path_preserves_d1(tmp_path: Path) ->
     assert clipboard_path.read_bytes() == (
         "I received the café menu.\r\nIt looks great — thanks!".encode()
     )
+
+
+def test_result_window_copy_persists_after_tk_owner_closes(tmp_path: Path) -> None:
+    repository_root = Path(__file__).parents[2]
+    executable = _autohotkey_executable(repository_root)
+    probe_script = tmp_path / "tk-clipboard-probe.py"
+    host_script = tmp_path / "tk-clipboard-host.ahk"
+    marker_path = tmp_path / "clipboard.txt"
+    error_path = tmp_path / "error.txt"
+    probe_script.write_text(
+        "\n".join(
+            (
+                "import sys",
+                "import tkinter as tk",
+                f"sys.path.insert(0, {str(repository_root / 'src')!r})",
+                "from proofread_it.presentation.result_window import _copy_text",
+                "root = tk.Tk()",
+                "root.withdraw()",
+                "_copy_text(root, 'I received the caf' + chr(233) + ' menu.' "
+                "+ chr(13) + chr(10) + 'It looks great ' + chr(8212) + ' thanks!')",
+                "root.after(100, root.destroy)",
+                "root.mainloop()",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    host_script.write_text(
+        "\n".join(
+            (
+                "#Requires AutoHotkey v2.0",
+                "exitCode := 1",
+                "clipboardBackup := ClipboardAll()",
+                "try {",
+                "    command := "
+                f"'\"{sys.executable}\" \"{probe_script}\"'",
+                f'    exitCode := RunWait(command, "{repository_root}", "Hide")',
+                "    if (exitCode != 0)",
+                '        throw Error("Tk clipboard probe failed with exit code " exitCode ".")',
+                "    if !ClipWait(1.0)",
+                '        throw Error("Clipboard text did not persist after Tk exited.")',
+                '    FileAppend(ReadRawClipboardText(), A_Args[1], "UTF-8-RAW")',
+                "    exitCode := 0",
+                "} catch as caughtError {",
+                '    FileAppend(caughtError.Message, A_Args[2], "UTF-8-RAW")',
+                "} finally {",
+                "    A_Clipboard := clipboardBackup",
+                "}",
+                "ReadRawClipboardText() {",
+                '    if !DllCall("User32\\OpenClipboard", "Ptr", 0, "Int")',
+                '        throw Error("Cannot open the clipboard.")',
+                "    try {",
+                '        handle := DllCall("User32\\GetClipboardData", "UInt", 13, "Ptr")',
+                "        if !handle",
+                '            throw Error("CF_UNICODETEXT is unavailable.")',
+                '        pointer := DllCall("Kernel32\\GlobalLock", "Ptr", handle, "Ptr")',
+                "        if !pointer",
+                '            throw Error("Cannot lock CF_UNICODETEXT.")',
+                "        try",
+                '            return StrGet(pointer, "UTF-16")',
+                "        finally",
+                '            DllCall("Kernel32\\GlobalUnlock", "Ptr", handle)',
+                "    } finally {",
+                '        DllCall("User32\\CloseClipboard")',
+                "    }",
+                "}",
+                "ExitApp(exitCode)",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            executable,
+            "/ErrorStdOut=UTF-8",
+            str(host_script),
+            str(marker_path),
+            str(error_path),
+        ],
+        cwd=repository_root,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    error_text = error_path.read_text(encoding="utf-8") if error_path.exists() else ""
+    assert result.returncode == 0, result.stdout + result.stderr + error_text
+    assert marker_path.read_bytes() == (
+        "I received the café menu.\r\nIt looks great — thanks!".encode()
+    )

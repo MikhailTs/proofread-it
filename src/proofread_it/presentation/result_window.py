@@ -1,5 +1,8 @@
 """Minimal desktop presentation for a complete proofreading result."""
 
+import ctypes
+import sys
+import time
 import tkinter as tk
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -95,5 +98,77 @@ def _copy_selection(event: tk.Event[tk.Text]) -> str:
 
 
 def _copy_text(owner: tk.Misc, value: str) -> None:
+    normalized = _normalize_clipboard_text(value)
+    if sys.platform == "win32":
+        _copy_windows_clipboard_text(normalized)
+        return
+
+    _copy_tk_clipboard_text(owner, normalized)
+
+
+def _copy_tk_clipboard_text(owner: tk.Misc, value: str) -> None:
     owner.clipboard_clear()
     owner.clipboard_append(value)
+    owner.update()
+
+
+def _normalize_clipboard_text(value: str) -> str:
+    """Represent every logical line break with one line feed."""
+    return value.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _copy_windows_clipboard_text(value: str) -> None:
+    """Transfer Unicode text ownership to Windows so it survives the result window."""
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    user32.OpenClipboard.argtypes = [ctypes.c_void_p]
+    user32.OpenClipboard.restype = ctypes.c_int
+    user32.EmptyClipboard.argtypes = []
+    user32.EmptyClipboard.restype = ctypes.c_int
+    user32.SetClipboardData.argtypes = [ctypes.c_uint, ctypes.c_void_p]
+    user32.SetClipboardData.restype = ctypes.c_void_p
+    user32.CloseClipboard.argtypes = []
+    user32.CloseClipboard.restype = ctypes.c_int
+    kernel32.GlobalAlloc.argtypes = [ctypes.c_uint, ctypes.c_size_t]
+    kernel32.GlobalAlloc.restype = ctypes.c_void_p
+    kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
+    kernel32.GlobalLock.restype = ctypes.c_void_p
+    kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+    kernel32.GlobalUnlock.restype = ctypes.c_int
+    kernel32.GlobalFree.argtypes = [ctypes.c_void_p]
+    kernel32.GlobalFree.restype = ctypes.c_void_p
+
+    for _attempt in range(5):
+        if user32.OpenClipboard(None):
+            break
+        time.sleep(0.01)
+    else:
+        raise ctypes.WinError(ctypes.get_last_error())
+
+    memory_handle: int | None = None
+    ownership_transferred = False
+    try:
+        if not user32.EmptyClipboard():
+            raise ctypes.WinError(ctypes.get_last_error())
+
+        windows_text = value.replace("\n", "\r\n")
+        payload = windows_text.encode("utf-16-le") + b"\x00\x00"
+        memory_handle = kernel32.GlobalAlloc(0x0002, len(payload))
+        if not memory_handle:
+            raise ctypes.WinError(ctypes.get_last_error())
+
+        pointer = kernel32.GlobalLock(memory_handle)
+        if not pointer:
+            raise ctypes.WinError(ctypes.get_last_error())
+        try:
+            ctypes.memmove(pointer, payload, len(payload))
+        finally:
+            kernel32.GlobalUnlock(memory_handle)
+
+        if not user32.SetClipboardData(13, memory_handle):
+            raise ctypes.WinError(ctypes.get_last_error())
+        ownership_transferred = True
+    finally:
+        if memory_handle and not ownership_transferred:
+            kernel32.GlobalFree(memory_handle)
+        user32.CloseClipboard()

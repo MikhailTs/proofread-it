@@ -32,6 +32,7 @@ class _TextStub:
         self.configuration: dict[str, object] = {}
         self.bindings: dict[str, tuple[object, str | None]] = {}
         self.clipboard: list[str] = []
+        self.clipboard_operations: list[str] = []
         self.focused = False
         self.selected_text = "selected result"
         self.tag_range: tuple[str, str, str] | None = None
@@ -64,10 +65,15 @@ class _TextStub:
         return self.selected_text
 
     def clipboard_clear(self) -> None:
+        self.clipboard_operations.append("clear")
         self.clipboard.clear()
 
     def clipboard_append(self, value: str) -> None:
+        self.clipboard_operations.append("append")
         self.clipboard.append(value)
+
+    def update(self) -> None:
+        self.clipboard_operations.append("update")
 
 
 def _event(widget: _TextStub) -> Any:
@@ -108,19 +114,51 @@ def test_click_focuses_disabled_text_and_control_a_selects_it() -> None:
     assert binding_result == "break"
 
 
-def test_control_c_copies_selected_text() -> None:
+def test_control_c_copies_selected_text(monkeypatch: MonkeyPatch) -> None:
     widget = _TextStub()
+    copied: list[str] = []
+    monkeypatch.setattr(result_window, "_copy_windows_clipboard_text", copied.append)
 
     binding_result = result_window._copy_selection(_event(widget))
 
-    assert widget.clipboard == ["selected result"]
+    assert copied == ["selected result"]
     assert binding_result == "break"
 
 
-def test_copy_text_replaces_clipboard_with_complete_result() -> None:
+def test_copy_text_replaces_clipboard_with_complete_result(monkeypatch: MonkeyPatch) -> None:
     widget = _TextStub()
-    widget.clipboard.append("old value")
+    copied: list[str] = []
+    monkeypatch.setattr(result_window, "_copy_windows_clipboard_text", copied.append)
 
     result_window._copy_text(widget, "Complete corrected result")  # type: ignore[arg-type]
 
+    assert copied == ["Complete corrected result"]
+
+
+def test_copy_text_normalizes_line_breaks_before_windows_clipboard(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    widget = _TextStub()
+    copied: list[str] = []
+    monkeypatch.setattr(result_window, "_copy_windows_clipboard_text", copied.append)
+
+    result_window._copy_text(  # type: ignore[arg-type]
+        widget,
+        "I received the café menu.\r\nIt looks great — thanks!\rThird\n\nFifth",
+    )
+
+    assert copied == [
+        "I received the café menu.\nIt looks great — thanks!\nThird\n\nFifth"
+    ]
+
+
+def test_tk_clipboard_fallback_flushes_data_before_owner_closes() -> None:
+    widget = _TextStub()
+
+    result_window._copy_tk_clipboard_text(  # type: ignore[arg-type]
+        widget,
+        "Complete corrected result",
+    )
+
     assert widget.clipboard == ["Complete corrected result"]
+    assert widget.clipboard_operations == ["clear", "append", "update"]
