@@ -81,10 +81,10 @@ def test_capture_clears_stale_data_waits_and_restores_clipboard() -> None:
     assert "A_Clipboard := clipboardBackup" in script
 
 
-def test_backend_runs_only_with_non_empty_text_outside_the_command_line() -> None:
+def test_backend_runs_only_with_usable_text_outside_the_command_line() -> None:
     script = Path("automation/windows/proofread-it.ahk").read_text(encoding="utf-8")
 
-    empty_guard = script.index('if (selectedText = "")')
+    empty_guard = script.index('if RegExMatch(selectedText, "^\\s*$")')
     backend_run = script.index("RunCaptured(command")
 
     assert empty_guard < backend_run

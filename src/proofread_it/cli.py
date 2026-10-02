@@ -63,7 +63,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             profile = load_profile(options.settings.with_name("profiles.json"), profile_name)
             stage = "selection"
             selected_text = os.environ.get(_SOURCE_TEXT, "")
-            if not selected_text:
+            if not selected_text.strip():
+                source_allowed = False
                 raise ValueError("No selected text was detected.")
             stage = "credential"
             api_key = read_api_key_from_environment(settings.api.api_key_env)

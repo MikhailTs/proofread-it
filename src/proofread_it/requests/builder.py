@@ -30,7 +30,7 @@ def build_request(
     settings: Settings,
 ) -> LogicalRequest:
     """Build the exact three-part logical request without reading local state or sending it."""
-    if not isinstance(text, str) or not text:
+    if not isinstance(text, str) or not text.strip():
         raise ValueError("text must be a non-empty string")
 
     unknown_fields = sorted(set(source_context) - _KNOWN_CONTEXT_FIELDS)

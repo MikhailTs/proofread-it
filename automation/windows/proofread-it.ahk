@@ -72,7 +72,7 @@ Invoke(profile, action) {
         }
 
         selectedText := CaptureSelectedText()
-        if (selectedText = "") {
+        if RegExMatch(selectedText, "^\s*$") {
             LogPreflightFailure(profile, action, "no_selection")
             MsgBox("No selected text was detected.", "Proofread It", "Icon!")
             return

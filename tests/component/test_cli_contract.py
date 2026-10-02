@@ -251,13 +251,18 @@ def test_missing_credential_fails_before_constructing_the_provider(
     assert event["error"]["type"] == "CredentialError"
 
 
-def test_empty_selection_is_logged_without_reading_the_credential(
+@pytest.mark.parametrize("source_text", [None, " ", "\t", "\r\n", " \t\r\n"])
+def test_empty_or_whitespace_selection_is_logged_without_reading_the_credential(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
     capsys: CaptureFixture[str],
+    source_text: str | None,
 ) -> None:
     settings_path = _write_config(tmp_path)
-    monkeypatch.delenv("PROOFREAD_IT_SOURCE_TEXT", raising=False)
+    if source_text is None:
+        monkeypatch.delenv("PROOFREAD_IT_SOURCE_TEXT", raising=False)
+    else:
+        monkeypatch.setenv("PROOFREAD_IT_SOURCE_TEXT", source_text)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
     exit_code = main(["--settings", str(settings_path), "--action", "copy_final"])
