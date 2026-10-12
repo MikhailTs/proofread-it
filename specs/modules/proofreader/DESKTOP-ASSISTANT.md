@@ -5,7 +5,7 @@
 - Approval authority: `Project owner`
 - Supersedes: `NONE`
 - Superseded by: `NONE`
-- Updated: `2026-09-17`
+- Updated: `2026-10-10`
 
 ## Contract Summary {#summary}
 
@@ -17,7 +17,7 @@ The product is a desktop text-transformation tool, not a chat client. Every requ
 
 - The MVP operates on Windows and uses an AutoHotkey v2 automation layer with a Python backend -> `spec://proofreader/DESKTOP-ASSISTANT#architecture`.
 - An invocation from an excluded application or window sends no data to the LLM API -> `spec://proofreader/DESKTOP-ASSISTANT#context-policy`.
-- API credentials are read from an environment variable and never written to configuration or logs -> `spec://proofreader/DESKTOP-ASSISTANT#api-access`.
+- API credentials are read directly by the short-lived Python backend from one explicitly configured local source and never written to configuration, process environment, arguments, or logs -> `spec://proofreader/DESKTOP-ASSISTANT#credential-storage`.
 - Every model response used by the MVP conforms to the structured result contract -> `spec://proofreader/DESKTOP-ASSISTANT#structured-result`.
 - The MVP writes full operational data, source text, request, and response data to one local log file, except credentials and authorization material -> `spec://proofreader/DESKTOP-ASSISTANT#logging`.
 - Correctness never depends on prompt caching, model-output determinism, application-specific service APIs, or ChatGPT browser automation -> `spec://proofreader/DESKTOP-ASSISTANT#request-construction` and `spec://proofreader/DESKTOP-ASSISTANT#integration-boundary`.
@@ -34,6 +34,7 @@ The product is a desktop text-transformation tool, not a chat client. Every requ
 - [ ] Clipboard contents are restored after capture unless the selected action intentionally places corrected text on the clipboard.
 - [ ] A second invocation while a request is active is rejected with a concise notification.
 - [ ] Missing credentials, invalid configuration, authentication failures, timeouts, connection failures, rate limits, server failures, unsupported models, malformed responses, and empty model output fail visibly without exposing credentials.
+- [ ] The shipped configuration reads one generic credential directly from Windows Credential Manager; an explicitly selected or legacy schema-version-1 file source remains usable without automatic fallback between sources.
 - [ ] The single MVP log contains diagnostic events, captured context, source text, complete logical requests, raw responses, normalized results, and errors, but contains no API key or authorization header.
 - [ ] Repeated invocations do not create or depend on ChatGPT web-chat history.
 
@@ -99,22 +100,26 @@ The shipped AutoHotkey automation MUST support both direct execution as the appl
 
 ## Configuration boundary {#configuration}
 
-**Normative:** The MVP MUST load two distinct, human-editable JSON files:
+**Normative:** The application MUST load two distinct, human-editable JSON files:
 
 - `settings.json` defines operational behavior: schema version, API model and credential source, timeouts and retries, default profile, context allow/exclusion policy, concurrency behavior, logging behavior, and relevant paths.
 - `profiles.json` defines model-processing behavior: schema version, task identifier, editable instructions, editing policy, output policy, tone/register guidance, and the subset of globally permitted context fields used by each profile. In schema version `1`, `profiles` MUST be an object keyed by profile name, and each profile MUST contain exactly `task`, `instructions`, and `context_fields`. `task` and `instructions` MUST be non-empty strings. `instructions` MUST contain the complete stable model prompt; editing, output, and tone/register policy MUST be expressed there instead of duplicated as independent control fields. `context_fields` MUST be an array of unique names drawn only from `application_name`, `process_name`, and `window_title`.
 
-Operational settings MUST NOT contain proofreading-specific language rules. Profiles MUST NOT contain capture, credential, concurrency, file-path, or logging mechanics. Each file MUST contain `schema_version`; the MVP version is integer `1`. Unsupported versions MUST fail clearly rather than be interpreted silently. Configuration fields MUST be added only for implemented behavior or a demonstrated extension point that would otherwise require a breaking format change.
+Operational settings MUST NOT contain proofreading-specific language rules. Profiles MUST NOT contain capture, credential, concurrency, file-path, or logging mechanics. Each file MUST contain `schema_version`; profiles remain at integer version `1`, while settings versions `1` and `2` are supported. Unsupported versions MUST fail clearly rather than be interpreted silently. Configuration fields MUST be added only for implemented behavior or a demonstrated extension point that would otherwise require a breaking format change.
 
 MVP hotkey bindings and their action/profile routing MUST be configured in the AutoHotkey automation source, not in `settings.json`. A binding MAY omit the profile so that `settings.default_profile` selects it. Editing those declarations is the accepted MVP customization mechanism and MUST NOT require Python source changes.
 
-For schema version `1`, `settings.api` MUST contain exactly `model`, `api_key_env`, `timeout_seconds`, `max_output_tokens`, and `retry_count`. `model` and `api_key_env` MUST be non-empty strings; `timeout_seconds` and `max_output_tokens` MUST be positive integers; and `retry_count` MUST be a non-negative integer. The shipped MVP values MUST be `gpt-5.6-luna`, `OPENAI_API_KEY`, `30`, `2048`, and `2`, respectively. The MVP MUST apply the fixed configured output-token limit to every request. Computing a dynamic output-token limit from the selected-text length is deferred until after MVP.
+For legacy settings schema version `1`, `settings.api` MUST contain exactly `model`, `api_key_env`, `timeout_seconds`, `max_output_tokens`, and `retry_count`. `api_key_env` MUST remain a valid non-empty environment-variable name so existing documents continue to validate, but it MUST NOT be used to deliver the credential at runtime; schema version `1` selects the fixed legacy file source defined by `spec://proofreader/DESKTOP-ASSISTANT#credential-storage`.
+
+For settings schema version `2`, `settings.api` MUST contain exactly `model`, `timeout_seconds`, `max_output_tokens`, and `retry_count`, and the root MUST contain `credential`. `credential.source` MUST be either `windows_credential_manager` or `file`. A Windows Credential Manager source MUST contain exactly `source` and a non-empty, trimmed `target`; a file source MUST contain exactly `source`. The shipped settings MUST use schema version `2`, target `ProofreadIt/OpenAIApiKey`, and source `windows_credential_manager`.
+
+In both settings versions, `model` MUST be a non-empty trimmed string; `timeout_seconds` and `max_output_tokens` MUST be positive integers; and `retry_count` MUST be a non-negative integer. The shipped API values MUST remain `gpt-5.6-luna`, `30`, `2048`, and `2`, respectively. The application MUST apply the fixed configured output-token limit to every request. Computing a dynamic output-token limit from the selected-text length is deferred until after MVP.
 
 For schema version `1`, `settings.context` MUST contain exactly `fields` and `exclusions`. `exclusions` MUST contain exactly `process_names` and `window_title_words`, each an array of unique, non-empty strings. Process-name entries are matched case-insensitively against the executable basename; window-title entries are matched case-insensitively as whole words. The shipped configuration MUST initially contain `KeePass.exe` in `process_names` and `password` in `window_title_words`. Users MAY add, remove, or edit entries in either list without changing source code.
 
 **Rationale:** Separating operation from language policy keeps configuration understandable and prevents profile selection from changing technical permissions.
 
-**Verification:** Configuration-schema tests load the shipped `proofread` profile and exclusion lists, accept supported examples without hotkey settings, reject unsupported versions, missing or unknown profile or context fields, duplicate or invalid context and exclusion entries, and invalid cross-boundary fields, and identify the failing field in the user-facing configuration error. Static or Windows automation tests verify that AHK bindings route actions with either the configured default profile or an explicit profile without Python source changes.
+**Verification:** Configuration-schema tests load both supported settings versions and the shipped `proofread` profile, accept the two exact schema-version-2 credential forms, map schema version `1` to the legacy file source, reject unsupported versions and invalid or cross-boundary fields, and identify the failing field in the user-facing configuration error. Static or Windows automation tests verify that AHK bindings route actions with either the configured default profile or an explicit profile without Python source changes.
 
 **Alternatives:** A single combined configuration file and profile-specific code paths were rejected because they blur authority and increase duplication. Runtime hotkey routing in `settings.json` is deferred beyond the MVP because editing the AutoHotkey bindings is sufficient for the intended user.
 
@@ -124,27 +129,41 @@ For schema version `1`, `settings.context` MUST contain exactly `fields` and `ex
 
 ## API access and credentials {#api-access}
 
-**Normative:** The backend MUST access the LLM through a small provider-facing API abstraction. `settings.json` MUST select the model, environment-variable name, request timeout, output-token limit when used, and retry count. For the MVP, the backend MUST read the API key from the named environment variable; `OPENAI_API_KEY` is the default example.
+**Normative:** The backend MUST access the LLM through a small provider-facing API abstraction. `settings.json` MUST select the model, credential source, request timeout, output-token limit when used, and retry count. The short-lived Python backend MUST resolve the API key directly according to `spec://proofreader/DESKTOP-ASSISTANT#credential-storage` and pass it directly to the provider adapter.
 
 The MVP provider adapter MUST use the official OpenAI Python SDK and its Responses API. It MUST map the provider-neutral instruction, structured-output contract, and serialized dynamic input to distinct Responses API fields; request strict JSON Schema output; set `store` to `false`; apply the configured model, timeout, output-token limit, and SDK retry count; and omit conversation and previous-response identifiers.
 
-During local MVP development, the sole secret source for application runs and explicitly selected live API tests MUST be `$env:USERPROFILE\.secrets\openai_token.txt`. For an application request, a short-lived credential wrapper MUST read the file only after the AutoHotkey automation has accepted a proofreading action and MUST inject its value into the named environment variable only for that request's Python backend process tree. The long-lived AutoHotkey automation, including any external script that loads it through `#Include`, MUST NOT receive the key in its environment, read the secret file, or make the key available to unrelated child processes. Starting the automation MUST NOT require a credential-bearing parent launcher.
-
-The explicit live-test wrapper MAY inject the key into only its selected test process tree. Neither wrapper MUST persist the key in the Windows User or Machine environment or pass the key on a command line. A missing, unreadable, or empty secret file MUST fail before any API request is attempted.
-
-The key and authorization material MUST NOT be stored in repository files or `settings.json`, included in the logical request, exposed in process arguments, or written to logs. The external development secret file MUST NOT be committed and SHOULD be readable only by the current Windows user.
+The long-lived AutoHotkey automation, any external script that loads it through `#Include`, the PowerShell launchers, and the `uv` parent process MUST NOT read or receive the key. Starting the automation and invoking explicitly selected live tests MUST NOT require a credential-bearing parent launcher. The key and authorization material MUST NOT be stored in repository files or `settings.json`, placed in a process environment, included in the logical request, exposed in process arguments or output, or written to logs.
 
 The core workflow MUST use a public LLM API and MUST NOT drive the ChatGPT web UI or reproduce private browser requests.
 
-**Rationale:** Isolating the provider SDK reduces coupling. Loading the development key only for one backend invocation preserves the environment-variable contract expected by API clients without exposing the key to a long-lived automation host or its unrelated child processes. The external plaintext file is an accepted temporary local-development tradeoff until an OS-native secret store replaces it.
+**Rationale:** Isolating the provider SDK reduces coupling. Direct credential resolution in the one short-lived Python process avoids exposing the key to PowerShell, `uv`, ambient environment inspection, a long-lived automation host, or unrelated child processes.
 
-**Verification:** API-client unit tests use a fake provider. Automation-launcher and per-invocation-wrapper tests use a temporary sentinel file and demonstrate that the AutoHotkey process and an unrelated host child cannot observe the key, while exactly the selected backend process tree can. Invocation-wrapper and live-test-wrapper tests demonstrate failure before an API call for a missing, unreadable, or empty file and absence of persistent User or Machine environment changes. Configuration, process-argument, output, and log tests scan for the sentinel API key and authorization header and find neither. Verification MUST NOT read the real development secret file.
+**Verification:** API-client unit tests use a fake provider. Credential-resolver tests use sentinel file and native-adapter fakes to cover both sources and all failure modes without reading a real user credential. Launcher tests demonstrate that AutoHotkey, PowerShell, `uv`, arguments, output, and process environments contain no sentinel key. A separately selected Windows integration test uses a unique temporary generic credential and deletes it in all outcomes. Log tests find neither the sentinel API key nor authorization material.
 
-**Alternatives:** A credential-bearing AutoHotkey process or external host, direct SDK calls throughout the application, keys in project configuration, persistent User or Machine environment variables, command-line key arguments, and ChatGPT DOM automation are rejected. Windows Credential Manager is deferred during the MVP but is the required first post-MVP improvement.
+**Alternatives:** A credential-bearing AutoHotkey or PowerShell process, environment-variable delivery, automatic fallback between stores, direct SDK calls throughout the application, keys in project configuration, command-line key arguments, and ChatGPT DOM automation are rejected.
 
-**Reconsider when:** MVP development ends, the application is distributed beyond the current local development setup, or organization-managed credentials are required. The first post-MVP reconsideration MUST replace the file source with Windows Credential Manager while preserving process-local delivery to the backend.
+**Reconsider when:** The application becomes cross-platform, organization-managed credentials are required, or a distribution model can provide a narrower application identity than the current Windows user.
 
-**Traceability:** `spec://proofreader/DESKTOP-ASSISTANT#configuration`, `docs/development.md`; source proposal `SPEC-007`, `SPEC-008`, `SPEC-050`, and `SPEC-055`; Project owner decisions on 2026-09-02 and 2026-09-09; `scripts/start.ps1`, planned per-invocation wrapper, `automation/windows/proofread-it.ahk`, and credential tests.
+**Traceability:** `spec://proofreader/DESKTOP-ASSISTANT#configuration`, `spec://proofreader/DESKTOP-ASSISTANT#credential-storage`, `docs/development.md`; source proposal `SPEC-007`, `SPEC-008`, `SPEC-050`, and `SPEC-055`; Project owner decisions on 2026-09-02, 2026-09-09, and 2026-10-10; launchers, provider adapter, and credential tests.
+
+## Post-MVP credential storage {#credential-storage}
+
+**Normative:** Settings schema version `2` MUST explicitly select exactly one credential source. `windows_credential_manager` MUST read a `CRED_TYPE_GENERIC` credential with the configured target from the current Windows user's credential set by calling `CredReadW` directly from Python. The shipped target MUST be `ProofreadIt/OpenAIApiKey`. The returned native allocation MUST be released with `CredFree` in every outcome. Credentials written by the supplied management command MUST use `CRED_PERSIST_LOCAL_MACHINE`.
+
+The `file` source and every schema-version-1 settings document MUST read `$env:USERPROFILE\.secrets\openai_token.txt` directly from Python. The file MUST NOT be committed and SHOULD be readable only by the current Windows user. A missing `USERPROFILE`, missing or unreadable source, empty credential, malformed generic-credential blob, or Windows Credential Manager error MUST fail before an API request. The selected source MUST NOT fall back to another source.
+
+Credential resolution MUST occur only after configuration, concurrency, source-exclusion, profile, and non-empty-selection checks pass. The secret MAY exist in Python-managed memory and the provider SDK for the duration required by the request, but MUST NOT be copied into a process environment, command line, configuration document, log, logical request, or user-visible diagnostic. The supplied credential-management command MUST accept the key only through a hidden interactive prompt and MUST support setting/replacing and removing the configured generic credential. Manual creation through the Windows Credential Manager UI MUST remain supported.
+
+**Rationale:** Windows Credential Manager protects the secret at rest for the current Windows user, while direct Python access minimizes the number of processes and transport surfaces that observe it. Explicit source selection prevents a forgotten plaintext file from silently defeating the chosen store.
+
+**Verification:** Unit tests inject file-system and native-store adapters to cover source selection, decoding, cleanup, missing and empty values, and no-fallback behavior. CLI and launcher tests prove that credential access occurs after all preflight gates and that no key enters environment variables, arguments, output, or logs. Management-command tests cover create, replace, and remove without accepting a command-line secret. An explicitly selected Windows test creates a unique temporary generic credential, reads it through the production adapter, and removes it in `finally`.
+
+**Alternatives:** PowerShell retrieval with child-process environment injection, automatic file fallback, project configuration secrets, persistent environment variables, and automatic migration or deletion of the legacy file are rejected.
+
+**Reconsider when:** A non-Windows platform is supported, Windows provides an application-scoped secret facility suitable for this distribution model, or managed enterprise identity replaces a user-held API key.
+
+**Traceability:** `spec://proofreader/DESKTOP-ASSISTANT#configuration`, `spec://proofreader/DESKTOP-ASSISTANT#api-access`, `spec://proofreader/DESKTOP-ASSISTANT#testability`; Project owner decision on 2026-10-10; Python credential resolver and management CLI, credential-free PowerShell launchers, and credential tests.
 
 ## Proofreading profile contract {#proofreading-profile}
 
@@ -386,21 +405,21 @@ Future application-specific collectors MUST remain optional and MUST be introduc
 
 ## Testability boundaries {#testability}
 
-**Normative:** Context normalization, request construction, API access, and response normalization MUST each be independently testable. Unit tests MUST NOT require AutoHotkey, the Windows clipboard, live network access, or a real API credential to cover those components. The default test run MUST NOT read `$env:USERPROFILE\.secrets\openai_token.txt`. The API abstraction MUST support a fake implementation, and UI/clipboard consumers MUST receive normalized results rather than parse raw provider responses.
+**Normative:** Context normalization, request construction, credential resolution, API access, and response normalization MUST each be independently testable. Unit tests MUST NOT require AutoHotkey, the Windows clipboard, live network access, or a real API credential to cover those components. The default test run MUST NOT read `$env:USERPROFILE\.secrets\openai_token.txt` or the shipped Windows Credential Manager target. Native credential-store access MUST be isolated behind a replaceable adapter. The API abstraction MUST support a fake implementation, and UI/clipboard consumers MUST receive normalized results rather than parse raw provider responses.
 
-Live API tests, when introduced, MUST be separately marked, excluded from the default test run, and selected explicitly. They MUST receive the credential only through the process-local mechanism defined by `spec://proofreader/DESKTOP-ASSISTANT#api-access`.
+Live API tests MUST be separately marked, excluded from the default test run, and selected explicitly. They MUST resolve the credential directly in their Python process through `spec://proofreader/DESKTOP-ASSISTANT#credential-storage`. A native Windows Credential Manager integration test MUST also be selected explicitly, use a unique temporary target and sentinel value, avoid the shipped target, and remove its credential in every outcome.
 
 Windows integration coverage MUST separately exercise active-window observation, clipboard capture/restoration, hotkey routing, and single-request concurrency.
 
 **Rationale:** Pure core components provide fast deterministic evidence while narrow Windows integration tests cover the platform boundary.
 
-**Verification:** The project test runner can execute core unit tests offline with the development secret file absent; component tests demonstrate fake API injection and normalized result consumption; the default run excludes live API tests; Windows acceptance commands are documented and reproducible. Per-invocation-wrapper and live-test-wrapper tests use only a sentinel credential, prove their respective process boundaries, and do not expose it in output.
+**Verification:** The project test runner can execute core unit tests offline with the development secret file and shipped generic credential absent; component tests demonstrate fake API injection and normalized result consumption; the default run excludes live API and native-store tests; Windows acceptance commands are documented and reproducible. Launcher tests prove their processes remain credential-free, and resolver tests use only injected sentinel sources without exposing them in output.
 
 **Alternatives:** End-to-end-only verification was rejected because it makes provider and clipboard failures hard to isolate.
 
 **Reconsider when:** The implementation language or packaging model changes while preserving equivalent isolation and evidence.
 
-**Traceability:** `spec://proofreader/DESKTOP-ASSISTANT#architecture`, `spec://proofreader/DESKTOP-ASSISTANT#api-access`, `spec://proofreader/DESKTOP-ASSISTANT#request-construction`, `spec://proofreader/DESKTOP-ASSISTANT#structured-result`, `docs/development.md`; source proposal `SPEC-052` through `SPEC-056`; Project owner decisions on 2026-09-02 and 2026-09-09; credential-wrapper and launcher tests.
+**Traceability:** `spec://proofreader/DESKTOP-ASSISTANT#architecture`, `spec://proofreader/DESKTOP-ASSISTANT#api-access`, `spec://proofreader/DESKTOP-ASSISTANT#credential-storage`, `spec://proofreader/DESKTOP-ASSISTANT#request-construction`, `spec://proofreader/DESKTOP-ASSISTANT#structured-result`, `docs/development.md`; source proposal `SPEC-052` through `SPEC-056`; Project owner decisions on 2026-09-02, 2026-09-09, and 2026-10-10; credential, launcher, and live-test tests.
 
 ## Explicit MVP scope {#mvp-scope}
 
@@ -408,17 +427,17 @@ Windows integration coverage MUST separately exercise active-window observation,
 
 The MVP explicitly excludes hotkey routing through `settings.json`; separate casual, professional, work-specific, application-specific, grammar-only, or other additional profiles; persistent conversations; chat UI; browser extensions; Discord and Telegram APIs; OCR; surrounding-message capture; sophisticated application-specific UI scraping; tray application; installer; cloud synchronization; direct replacement of selected text; Windows Credential Manager; automatic application-based profile selection; manual context notes; local history; request queues; multiple simultaneous requests; dynamic output-token limits derived from selected-text length; and a dynamic in-progress indicator between hotkey handling and the terminal result or error.
 
-Windows Credential Manager integration MUST be the first post-MVP implementation task and MUST replace the development file as the secret source. All other items excluded from the MVP are candidates only; this document does not authorize or require their implementation.
+Windows Credential Manager integration MUST be the first post-MVP implementation task and is defined by `spec://proofreader/DESKTOP-ASSISTANT#credential-storage`: it becomes the shipped default while the explicitly selected and schema-version-1 legacy file source remains available. All other items excluded from the MVP are candidates only; this document does not authorize or require their implementation.
 
 **Rationale:** The boundary contains the smallest end-to-end workflow that replaces manual web-chat proofreading while retaining inspectable results, privacy controls, and diagnostic evidence.
 
-**Verification:** Release checklist maps every included item to a passing test or recorded Windows manual acceptance, confirms excluded features are not required for operation, and records Windows Credential Manager integration as the first post-MVP task.
+**Verification:** The historical release checklist maps every included MVP item to a passing test or recorded Windows manual acceptance. Post-MVP credential acceptance separately verifies the default Windows Credential Manager source and retained explicit file mode.
 
 **Alternatives:** A richer initial GUI, application-specific integrations, and Windows Credential Manager within the MVP were rejected to keep the first implementation focused.
 
-**Reconsider when:** MVP acceptance is complete; Windows Credential Manager integration then takes precedence over other feature increments.
+**Reconsider when:** The credential-storage increment is accepted; other post-MVP candidates may then be prioritized independently.
 
-**Traceability:** All decisions in this specification; `spec://proofreader/DESKTOP-ASSISTANT#api-access`; source proposal `SPEC-057` through `SPEC-059`; Project owner decisions on 2026-09-02 and 2026-09-09; code and tests `UNKNOWN`.
+**Traceability:** All decisions in this specification; `spec://proofreader/DESKTOP-ASSISTANT#api-access`, `spec://proofreader/DESKTOP-ASSISTANT#credential-storage`; source proposal `SPEC-057` through `SPEC-059`; Project owner decisions on 2026-09-02, 2026-09-09, and 2026-10-10; code and tests `UNKNOWN`.
 
 ## Cross-Cutting Invariants {#invariants}
 
@@ -428,6 +447,7 @@ Windows Credential Manager integration MUST be the first post-MVP implementation
 - Dynamic text and source metadata cannot override stable proofreading and output instructions -> `spec://proofreader/DESKTOP-ASSISTANT#request-construction`.
 - Only a validated normalized result may reach result presentation or clipboard output -> `spec://proofreader/DESKTOP-ASSISTANT#structured-result`.
 - Credentials never enter configuration, logical requests, model-visible input, or logs -> `spec://proofreader/DESKTOP-ASSISTANT#api-access` and `spec://proofreader/DESKTOP-ASSISTANT#logging`.
+- Credentials never enter PowerShell, command arguments, or process environments, and the configured source never falls back implicitly -> `spec://proofreader/DESKTOP-ASSISTANT#credential-storage`.
 - Platform automation remains outside profile and model-processing policy -> `spec://proofreader/DESKTOP-ASSISTANT#architecture` and `spec://proofreader/DESKTOP-ASSISTANT#configuration`.
 
 ## Semantic changelog {#changelog}
@@ -452,3 +472,5 @@ Windows Credential Manager integration MUST be the first post-MVP implementation
   `hotkeys require explicit profile names and invocation boundaries reject omitted profiles -> profile omission selects settings.default_profile while an explicit name remains an override`; reason: `make the configured default effective for ordinary desktop and direct backend use`; invalidates: `AutoHotkey bindings and invocation commands, backend and source-check CLIs, credential wrapper, routing tests, and desktop documentation`; review: `NONE`.
 - 2026-09-17 — Project owner — `spec://proofreader/DESKTOP-ASSISTANT#acceptance`, `spec://proofreader/DESKTOP-ASSISTANT#configuration`, `spec://proofreader/DESKTOP-ASSISTANT#clipboard`:
   `MVP settings include clipboard and UI policies and clipboard restoration may be disabled by configuration -> MVP settings do not require those policies and captured clipboard contents are restored unless the result action copies corrected text`; reason: `Project owner removed the unused settings requirements`; invalidates: `prior configuration and clipboard acceptance evidence; current settings, automation, and clipboard tests require revalidation`; review: `NONE`.
+- 2026-10-10 — Project owner — `spec://proofreader/DESKTOP-ASSISTANT#constraints`, `spec://proofreader/DESKTOP-ASSISTANT#acceptance`, `spec://proofreader/DESKTOP-ASSISTANT#configuration`, `spec://proofreader/DESKTOP-ASSISTANT#api-access`, `spec://proofreader/DESKTOP-ASSISTANT#credential-storage`, `spec://proofreader/DESKTOP-ASSISTANT#testability`, `spec://proofreader/DESKTOP-ASSISTANT#mvp-scope`, `spec://proofreader/DESKTOP-ASSISTANT#invariants`:
+  `a PowerShell wrapper reads the fixed development file and injects its value through one backend process environment; Windows Credential Manager must later replace the file -> shipped settings schema version 2 selects a generic Windows Credential Manager credential read directly by Python, explicit and schema-version-1 legacy file modes remain available without automatic fallback, and credentials never pass through PowerShell, uv arguments, or process environments`; reason: `reduce runtime credential exposure while retaining a deliberate compatibility path`; invalidates: `credential and configuration specification evidence; settings, config loader, credential reader, launchers, live tests, failure logging, credential tests, development documentation, Windows acceptance documentation, and credential-related MVP checklist future-state statements`; review: `NONE`.

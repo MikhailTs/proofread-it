@@ -15,13 +15,16 @@ from proofread_it.config.loader import (
 
 def _settings_payload(log_path: str) -> dict[str, object]:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "api": {
             "model": "gpt-5.6-luna",
-            "api_key_env": "OPENAI_API_KEY",
             "timeout_seconds": 30,
             "max_output_tokens": 2048,
             "retry_count": 2,
+        },
+        "credential": {
+            "source": "windows_credential_manager",
+            "target": "ProofreadIt/OpenAIApiKey",
         },
         "default_profile": "proofread",
         "context": {
@@ -34,6 +37,16 @@ def _settings_payload(log_path: str) -> dict[str, object]:
         "concurrency": {"lock_path": "request.lock"},
         "logging": {"path": log_path},
     }
+
+
+def _legacy_settings_payload(log_path: str) -> dict[str, object]:
+    payload = _settings_payload(log_path)
+    payload["schema_version"] = 1
+    payload.pop("credential")
+    api = payload["api"]
+    assert isinstance(api, dict)
+    api["api_key_env"] = "OPENAI_API_KEY"
+    return payload
 
 
 def test_log_path_is_resolved_relative_to_settings_file(tmp_path: Path) -> None:
@@ -94,7 +107,7 @@ def test_invalid_api_key_environment_variable_name_is_rejected(
     api_key_env: object,
 ) -> None:
     settings_path = tmp_path / "settings.json"
-    payload = _settings_payload("events.jsonl")
+    payload = _legacy_settings_payload("events.jsonl")
     api = payload["api"]
     assert isinstance(api, dict)
     api["api_key_env"] = api_key_env
@@ -102,6 +115,61 @@ def test_invalid_api_key_environment_variable_name_is_rejected(
 
     with pytest.raises(ConfigurationError, match="settings.api.api_key_env"):
         load_settings(settings_path)
+
+
+def test_schema_version_one_maps_to_the_legacy_file_source(tmp_path: Path) -> None:
+    settings_path = tmp_path / "settings.json"
+    settings_path.write_text(
+        json.dumps(_legacy_settings_payload("events.jsonl")),
+        encoding="utf-8",
+    )
+
+    settings = load_settings(settings_path)
+
+    assert settings.schema_version == 1
+    assert settings.credential.source == "file"
+    assert settings.credential.target is None
+    assert settings.api.api_key_env == "OPENAI_API_KEY"
+
+
+@pytest.mark.parametrize(
+    ("credential", "error_path"),
+    [
+        (None, "settings.credential"),
+        ({"source": "automatic"}, "settings.credential.source"),
+        ({"source": "file", "target": "unused"}, "settings.credential.target"),
+        ({"source": "windows_credential_manager"}, "settings.credential.target"),
+        (
+            {"source": "windows_credential_manager", "target": " ProofreadIt/Test"},
+            "settings.credential.target",
+        ),
+    ],
+)
+def test_invalid_schema_version_two_credential_is_rejected(
+    tmp_path: Path,
+    credential: object,
+    error_path: str,
+) -> None:
+    settings_path = tmp_path / "settings.json"
+    payload = _settings_payload("events.jsonl")
+    payload["credential"] = credential
+    settings_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ConfigurationError, match=error_path):
+        load_settings(settings_path)
+
+
+def test_schema_version_two_accepts_explicit_file_source(tmp_path: Path) -> None:
+    settings_path = tmp_path / "settings.json"
+    payload = _settings_payload("events.jsonl")
+    payload["credential"] = {"source": "file"}
+    settings_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    settings = load_settings(settings_path)
+
+    assert settings.schema_version == 2
+    assert settings.credential.source == "file"
+    assert settings.api.api_key_env is None
 
 
 @pytest.mark.parametrize(

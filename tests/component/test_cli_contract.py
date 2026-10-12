@@ -15,6 +15,7 @@ from proofread_it.concurrency import (
 )
 from proofread_it.models import LogicalRequest
 from proofread_it.providers.base import ProviderResponse
+from proofread_it.providers.credentials import CredentialError
 from proofread_it.source_check import BLOCKED_EXIT_CODE
 
 _SENTINEL_KEY = "cli-sentinel-key-must-not-appear"
@@ -82,6 +83,7 @@ def _write_config(tmp_path: Path) -> Path:
 
 
 def _connect_fake_provider(monkeypatch: MonkeyPatch, provider: _FakeProvider) -> None:
+    monkeypatch.setattr("proofread_it.cli.resolve_api_key", lambda _settings: _SENTINEL_KEY)
     monkeypatch.setattr(
         "proofread_it.cli.OpenAIProvider",
         lambda _settings, api_key, **_kwargs: provider if api_key == _SENTINEL_KEY else None,
@@ -98,7 +100,6 @@ def test_cli_sends_captured_text_and_shows_the_validated_result(
     monkeypatch.setenv("PROOFREAD_IT_SOURCE_PROCESS_NAME", "firefox.exe")
     monkeypatch.setenv("PROOFREAD_IT_SOURCE_WINDOW_TITLE", "Draft — Mozilla Firefox")
     monkeypatch.setenv("PROOFREAD_IT_SOURCE_TEXT", "She go to the library.")
-    monkeypatch.setenv("OPENAI_API_KEY", _SENTINEL_KEY)
     shown_results: list[dict[str, object]] = []
     monkeypatch.setattr("proofread_it.cli.show_result", lambda **result: shown_results.append(result))
 
@@ -145,7 +146,6 @@ def test_copy_final_writes_only_validated_text_to_stdout(
     provider = _FakeProvider(final_text=final_text)
     _connect_fake_provider(monkeypatch, provider)
     monkeypatch.setenv("PROOFREAD_IT_SOURCE_TEXT", "She go to the library.")
-    monkeypatch.setenv("OPENAI_API_KEY", _SENTINEL_KEY)
     shown_results: list[dict[str, object]] = []
     monkeypatch.setattr("proofread_it.cli.show_result", lambda **result: shown_results.append(result))
 
@@ -192,7 +192,6 @@ def test_cli_uses_configured_default_unless_profile_is_explicit(
     provider = _FakeProvider()
     _connect_fake_provider(monkeypatch, provider)
     monkeypatch.setenv("PROOFREAD_IT_SOURCE_TEXT", "She go to the library.")
-    monkeypatch.setenv("OPENAI_API_KEY", _SENTINEL_KEY)
 
     arguments = ["--settings", str(settings_path), "--action", "copy_final"]
     if requested_profile is not None:
@@ -217,7 +216,10 @@ def test_missing_credential_fails_before_constructing_the_provider(
 ) -> None:
     settings_path = _write_config(tmp_path)
     monkeypatch.setenv("PROOFREAD_IT_SOURCE_TEXT", "She go to the library.")
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    def missing_credential(_settings: object) -> str:
+        raise CredentialError("The configured API credential is unavailable")
+
+    monkeypatch.setattr("proofread_it.cli.resolve_api_key", missing_credential)
     constructed = False
 
     def provider_factory(*_args: object) -> _FakeProvider:
@@ -241,7 +243,7 @@ def test_missing_credential_fails_before_constructing_the_provider(
     captured = capsys.readouterr()
     assert exit_code == 1
     assert not constructed
-    assert "OPENAI_API_KEY" in captured.err
+    assert "configured API credential" in captured.err
     assert _SENTINEL_KEY not in captured.err
     event = json.loads((tmp_path / "events.jsonl").read_text(encoding="utf-8"))
     assert event["event"] == "invocation_failed"
@@ -263,7 +265,10 @@ def test_empty_or_whitespace_selection_is_logged_without_reading_the_credential(
         monkeypatch.delenv("PROOFREAD_IT_SOURCE_TEXT", raising=False)
     else:
         monkeypatch.setenv("PROOFREAD_IT_SOURCE_TEXT", source_text)
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "proofread_it.cli.resolve_api_key",
+        lambda _settings: pytest.fail("credential must not be read"),
+    )
 
     exit_code = main(["--settings", str(settings_path), "--action", "copy_final"])
 
@@ -283,7 +288,10 @@ def test_invalid_profile_is_logged_before_credential_access(
 ) -> None:
     settings_path = _write_config(tmp_path)
     monkeypatch.setenv("PROOFREAD_IT_SOURCE_TEXT", "Draft text")
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "proofread_it.cli.resolve_api_key",
+        lambda _settings: pytest.fail("credential must not be read"),
+    )
 
     exit_code = main(
         ["--settings", str(settings_path), "--profile", "missing", "--action", "show_full"]
@@ -308,7 +316,10 @@ def test_excluded_source_fails_before_reading_credentials_or_constructing_provid
     settings_path.write_text(json.dumps(payload), encoding="utf-8")
     monkeypatch.setenv("PROOFREAD_IT_SOURCE_PROCESS_NAME", "keepass.exe")
     monkeypatch.setenv("PROOFREAD_IT_SOURCE_TEXT", "must-not-be-sent")
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "proofread_it.cli.resolve_api_key",
+        lambda _settings: pytest.fail("credential must not be read"),
+    )
     constructed = False
 
     def provider_factory(*_args: object) -> _FakeProvider:
@@ -343,7 +354,10 @@ def test_parallel_invocation_is_rejected_before_credentials_or_provider(
     capsys: CaptureFixture[str],
 ) -> None:
     settings_path = _write_config(tmp_path)
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "proofread_it.cli.resolve_api_key",
+        lambda _settings: pytest.fail("credential must not be read"),
+    )
     constructed = False
 
     def provider_factory(*_args: object) -> _FakeProvider:

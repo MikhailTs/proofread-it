@@ -29,9 +29,10 @@ packages = ["src/proofread_it"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-addopts = ["--strict-config", "--strict-markers", "-m", "not live"]
+addopts = ["--strict-config", "--strict-markers", "-m", "not live and not credential_store"]
 markers = [
-    "live: requires an explicitly injected development credential",
+    "credential_store: explicitly mutates one temporary Windows generic credential",
+    "live: resolves the configured real credential and may make billable API requests",
 ]
 
 [tool.ruff]

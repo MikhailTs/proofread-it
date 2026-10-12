@@ -12,7 +12,6 @@ from proofread_it.config.loader import ConfigurationError, load_settings
 from proofread_it.config.schemas import Settings
 from proofread_it.context.normalize import normalize_source_context
 from proofread_it.context.policy import find_source_exclusion
-from proofread_it.providers.credentials import CredentialError
 
 _SOURCE_PROCESS_NAME = "PROOFREAD_IT_SOURCE_PROCESS_NAME"
 _SOURCE_TEXT = "PROOFREAD_IT_SOURCE_TEXT"
@@ -34,24 +33,6 @@ _REASONS: Final[dict[str, tuple[str, type[Exception], str, bool]]] = {
         "The active window changed before text capture.",
         False,
     ),
-    "credential_unavailable": (
-        "credential",
-        CredentialError,
-        "The development API credential file is unavailable.",
-        True,
-    ),
-    "credential_empty": (
-        "credential",
-        CredentialError,
-        "The development API credential file is empty.",
-        True,
-    ),
-    "configuration_invalid": (
-        "configuration",
-        ConfigurationError,
-        "The application settings are invalid.",
-        True,
-    ),
 }
 
 
@@ -64,6 +45,7 @@ def log_preflight_failure(
     error: Exception,
     include_source_text: bool,
     settings: Settings | None = None,
+    sensitive_values: tuple[str, ...] = (),
 ) -> bool:
     """Append one safe failure event when the configured log path can be found."""
     loaded_settings = settings
@@ -82,12 +64,6 @@ def log_preflight_failure(
     if log_path is None:
         return False
 
-    api_key_env = (
-        loaded_settings.api.api_key_env
-        if loaded_settings is not None
-        else _recover_api_key_env(raw_settings)
-    )
-    api_key = os.environ.get(api_key_env, "") if api_key_env else ""
     source = normalize_source_context(
         os.environ.get(_SOURCE_PROCESS_NAME) or None,
         os.environ.get(_SOURCE_WINDOW_TITLE) or None,
@@ -134,7 +110,7 @@ def log_preflight_failure(
         "error": {"type": type(error).__name__, "detail": str(error)},
     }
     try:
-        log_event(log_path, event, sensitive_values=(api_key,))
+        log_event(log_path, event, sensitive_values=sensitive_values)
     except OSError:
         return False
     return True
@@ -157,14 +133,6 @@ def _recover_log_path(path: Path, payload: dict[str, object] | None) -> Path | N
         return None
     log_path = Path(value)
     return (log_path if log_path.is_absolute() else path.parent / log_path).resolve()
-
-
-def _recover_api_key_env(payload: dict[str, object] | None) -> str | None:
-    api = payload.get("api") if payload is not None else None
-    if not isinstance(api, dict):
-        return None
-    value = api.get("api_key_env")
-    return value if isinstance(value, str) and value else None
 
 
 def _parser() -> argparse.ArgumentParser:

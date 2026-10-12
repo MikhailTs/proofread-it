@@ -1,50 +1,34 @@
-"""Component tests for process-local live-test credential injection."""
+"""Component tests for the credential-free live-test launcher."""
 
-import json
 import os
 import subprocess
 from pathlib import Path
 
-import pytest
-
-_API_KEY_ENV = "PROOFREAD_IT_SENTINEL_API_KEY"
-_SENTINEL = "live-wrapper-sentinel-must-not-appear"
+_SENTINEL_ENV = "PROOFREAD_IT_SENTINEL_API_KEY"
 
 
-def _write_settings(path: Path) -> None:
-    path.write_text(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "api": {
-                    "model": "gpt-5.6-luna",
-                    "api_key_env": _API_KEY_ENV,
-                    "timeout_seconds": 30,
-                    "max_output_tokens": 2048,
-                    "retry_count": 2,
-                },
-                "default_profile": "proofread",
-                "context": {
-                    "fields": [],
-                    "exclusions": {"process_names": [], "window_title_words": []},
-                },
-                "concurrency": {"lock_path": "request.lock"},
-                "logging": {"path": "events.jsonl"},
-            }
-        ),
+def test_live_wrapper_passes_only_the_settings_path(tmp_path: Path) -> None:
+    repository_root = Path(__file__).parents[2]
+    settings_path = tmp_path / "settings.json"
+    test_path = tmp_path / "selected-live-test.py"
+    fake_bin = tmp_path / "bin"
+    observed_path = tmp_path / "observed-settings.txt"
+    fake_bin.mkdir()
+    (fake_bin / "uv.cmd").write_text(
+        f"""@echo off
+if not "%{_SENTINEL_ENV}%"=="" exit /b 41
+> "%PROOFREAD_IT_OBSERVED_SETTINGS%" echo %PROOFREAD_IT_LIVE_SETTINGS_PATH%
+echo 1 passed
+exit /b 0
+""",
         encoding="utf-8",
     )
-
-
-def _run_wrapper(
-    repository_root: Path,
-    settings_path: Path,
-    user_profile: Path,
-) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
-    environment["USERPROFILE"] = str(user_profile)
-    environment.pop(_API_KEY_ENV, None)
-    return subprocess.run(
+    environment["PATH"] = f"{fake_bin}{os.pathsep}{environment['PATH']}"
+    environment["PROOFREAD_IT_OBSERVED_SETTINGS"] = str(observed_path)
+    environment.pop(_SENTINEL_ENV, None)
+
+    result = subprocess.run(
         [
             "powershell.exe",
             "-NoProfile",
@@ -56,7 +40,7 @@ def _run_wrapper(
             "-SettingsPath",
             str(settings_path),
             "-TestPath",
-            str(repository_root / "tests" / "live" / "test_credential_environment.py"),
+            str(test_path),
         ],
         cwd=repository_root,
         env=environment,
@@ -65,56 +49,18 @@ def _run_wrapper(
         text=True,
     )
 
-
-def test_wrapper_injects_a_temporary_secret_only_into_the_live_test_process(
-    tmp_path: Path,
-) -> None:
-    repository_root = Path(__file__).parents[2]
-    settings_path = tmp_path / "settings.json"
-    secret_path = tmp_path / ".secrets" / "openai_token.txt"
-    secret_path.parent.mkdir()
-    secret_path.write_text(f"  {_SENTINEL}\n", encoding="utf-8")
-    _write_settings(settings_path)
-    original_parent_value = os.environ.get(_API_KEY_ENV)
-
-    result = _run_wrapper(repository_root, settings_path, tmp_path)
-
-    output = result.stdout + result.stderr
-    assert result.returncode == 0, output
-    assert "1 passed" in output
-    assert _SENTINEL not in output
-    assert _SENTINEL not in " ".join(result.args)
-    assert os.environ.get(_API_KEY_ENV) == original_parent_value
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "1 passed" in result.stdout
+    assert observed_path.read_text(encoding="utf-8").strip() == str(settings_path.resolve())
 
 
-@pytest.mark.parametrize("secret_state", ["missing", "empty", "unreadable"])
-def test_wrapper_fails_before_live_tests_when_secret_file_is_unusable(
-    tmp_path: Path,
-    secret_state: str,
-) -> None:
-    repository_root = Path(__file__).parents[2]
-    settings_path = tmp_path / "settings.json"
-    secret_path = tmp_path / ".secrets" / "openai_token.txt"
-    secret_path.parent.mkdir()
-    if secret_state == "empty":
-        secret_path.write_text(" \r\n\t", encoding="utf-8")
-    elif secret_state == "unreadable":
-        secret_path.mkdir()
-    _write_settings(settings_path)
+def test_live_wrapper_contains_no_credential_transport_or_storage_access() -> None:
+    wrapper = Path("scripts/test-live.ps1").read_text(encoding="utf-8")
 
-    result = _run_wrapper(repository_root, settings_path, tmp_path)
-
-    output = result.stdout + result.stderr
-    assert result.returncode != 0
-    assert "1 passed" not in output
-    assert _SENTINEL not in output
-
-
-def test_wrapper_never_targets_persistent_environment_scopes() -> None:
-    repository_root = Path(__file__).parents[2]
-
-    wrapper = (repository_root / "scripts" / "test-live.ps1").read_text(encoding="utf-8")
-
-    assert '"Process"' in wrapper
+    assert "openai_token.txt" not in wrapper
+    assert "api_key" not in wrapper.casefold()
+    assert "credential" not in wrapper.casefold()
+    assert "Get-Content" not in wrapper
+    assert "ConvertFrom-Json" not in wrapper
     assert '"User"' not in wrapper
     assert '"Machine"' not in wrapper

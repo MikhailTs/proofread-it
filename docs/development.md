@@ -11,8 +11,16 @@ uv run mypy src
 
 ## Running the desktop application
 
-Install AutoHotkey v2, put the development API key in
-`$env:USERPROFILE\.secrets\openai_token.txt`, then launch the application with:
+Install AutoHotkey v2 and configure the API credential. The shipped schema-version-2 settings use
+the generic Windows Credential Manager target `ProofreadIt/OpenAIApiKey`. Store or replace it through
+the hidden interactive prompt:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\manage-credential.ps1 `
+    -Action Set
+```
+
+Then launch the application with:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start.ps1
@@ -60,7 +68,7 @@ If copying does not produce text within one second, the backend is not started a
 shown.
 
 Every completed or failed API invocation is appended to `logs/proofread-it.jsonl`. Failures before an
-API request, including missing development credentials and an empty selection, are also recorded
+API request, including missing credentials and an empty selection, are also recorded
 when the configured log path can be read. The event contains
 the selected text and source context, complete logical request, request duration, API status, model
 output, raw API response, normalized result, SDK retry observations, or safe error detail. Each item
@@ -72,25 +80,48 @@ needs. The `logs/` directory is ignored by Git.
 
 ## Development API credential
 
-During MVP development, the API secret source is:
+Python reads the configured credential directly after configuration, concurrency, source, profile,
+and selection checks pass. The key is passed directly to the OpenAI client; AutoHotkey, PowerShell,
+`uv`, command arguments, and process environment variables do not receive it.
 
-```text
-$env:USERPROFILE\.secrets\openai_token.txt
+To remove the configured generic credential, run:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\manage-credential.ps1 `
+    -Action Remove
 ```
 
-Do not commit this file, copy the token into project configuration, pass it on a command line, or persist it in the Windows User or Machine environment. Restrict the file so that only the current Windows user can read it.
+The same entry can be managed manually in **Credential Manager → Windows Credentials → Generic
+Credentials**. Use `ProofreadIt/OpenAIApiKey` as the Internet or network address,
+`OPENAI_API_KEY` as the non-secret username label, and the API key as the password. If a custom
+schema-version-2 settings file selects another `credential.target`, use that exact target instead.
 
-The explicit live-test wrapper reads the file only when invoked and injects its value into the environment variable selected by settings (`OPENAI_API_KEY` by default) only for its test process tree. It never creates a persistent Windows User or Machine variable. Run the live checks with:
+The retained plaintext-file mode is explicit:
+
+```json
+"credential": {"source": "file"}
+```
+
+It reads `$env:USERPROFILE\.secrets\openai_token.txt` directly from Python. Existing schema-version-1
+settings also select this file for compatibility; their `api_key_env` field is validated but no
+longer used. Protect the file so only the current Windows user can read it, and never commit it.
+There is no fallback: manager mode does not read the file when its target is missing, and file mode
+does not read Credential Manager. Neither source is imported into or deleted from the other.
+
+Run the live checks with:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-live.ps1
 ```
 
-This command verifies process-local credential delivery and makes a real, billable OpenAI Responses
+This command verifies direct credential resolution and makes a real, billable OpenAI Responses
 API request using the model and limits in `config/settings.json`. The network test checks the response
 envelope and strict proofreading shape without asserting nondeterministic wording. A normal
-`uv run pytest` remains offline, does not read the real secret file, and excludes tests marked `live`.
-For each accepted hotkey action, `scripts/invoke.ps1` reads the credential file and injects the key
-only into that short-lived backend invocation process tree. The long-lived AutoHotkey automation and
-any external host never receive the key. The wrapper restores its previous process environment after
-the backend exits. Windows Credential Manager integration is the first post-MVP task.
+`uv run pytest` remains offline, reads neither real source, and excludes tests marked `live` or
+`credential_store`. The native store round-trip uses only a unique temporary target and can be run
+explicitly with:
+
+```powershell
+uv run --no-sync pytest -q -p no:cacheprovider -m credential_store `
+    tests/windows/test_credential_store.py
+```

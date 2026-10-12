@@ -1,13 +1,34 @@
 # Windows acceptance
 
+## Credential sources
+
+The shipped schema-version-2 configuration selects Windows Credential Manager target
+`ProofreadIt/OpenAIApiKey`. Store or replace the key without placing it in command arguments:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\manage-credential.ps1 `
+    -Action Set
+```
+
+Confirm the entry appears under **Credential Manager → Windows Credentials → Generic Credentials**.
+It may alternatively be created there manually with target `ProofreadIt/OpenAIApiKey`, username
+`OPENAI_API_KEY`, and the API key as its password. Neither method prints the key.
+
+For fallback-boundary acceptance, keep a valid legacy file at
+`$env:USERPROFILE\.secrets\openai_token.txt`, temporarily remove the generic credential, and leave
+`credential.source` set to `windows_credential_manager`. Invoke proofreading and confirm it fails at
+stage `credential`, sends no API request, and does not use the file. Restore the generic credential,
+then change the settings object to `"credential": {"source": "file"}` and confirm an invocation
+succeeds from the file without reading Credential Manager. Restore the shipped manager object after
+the check. No test should copy or delete one source automatically because the other is selected.
+
 ## Selected-text capture and invocation logging
 
 Successful hotkey invocations in this procedure make real, billable OpenAI Responses API requests
 using the model and limits in `config/settings.json`.
 
 1. Synchronize the local environment with `uv sync --dev`.
-2. Confirm the development API key is stored in
-   `$env:USERPROFILE\.secrets\openai_token.txt`.
+2. Confirm the API key is available in the source explicitly selected by `credential.source`.
 3. From the repository root, start `automation/windows/proofread-it.ahk` with the credential-free
    convenience launcher:
 
@@ -78,7 +99,7 @@ direct backend launches.
 4. If KeePass is installed, repeat in `KeePass.exe` and confirm the event reports a `process_name`
    match for `KeePass.exe` with the same no-capture and no-API behavior.
 
-These checks do not make a billable API request and do not require the development credential file.
+These checks do not make a billable API request and do not access either credential source.
 Changing the lists under `context.exclusions` in `config/settings.json` must change the blocked
 sources after the file is saved, without an AutoHotkey source change.
 
@@ -108,6 +129,8 @@ Both hotkeys must route the same profile and actions as the direct launch. Both 
 `config/settings.json` and run the backend from this repository rather than resolving either path
 relative to the temporary host script.
 
-`scripts/start.ps1` does not read or inject the API credential; either `.ahk` file may instead be
-started normally with AutoHotkey v2. Only the per-invocation wrapper reads the secret, after a hotkey
-action has been accepted, and exposes it to that short-lived backend process tree.
+`scripts/start.ps1`, `scripts/invoke.ps1`, and either `.ahk` host do not read or inject the API credential.
+The automation startup does not read or inject the API credential. The per-invocation wrapper is
+credential-free as well.
+After the preflight gates pass, the short-lived Python backend reads exactly the selected
+source and passes the key directly to the OpenAI client without using a process environment variable.

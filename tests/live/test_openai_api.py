@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from proofread_it.config.loader import load_default_profile, load_settings
-from proofread_it.providers.credentials import read_api_key_from_environment
+from proofread_it.providers.credentials import resolve_api_key
 from proofread_it.providers.openai import OpenAIProvider
 from proofread_it.requests.builder import build_request
 
@@ -21,7 +21,7 @@ def test_openai_api_returns_the_strict_proofreading_shape() -> None:
     settings_path = Path(settings_value)
     settings = load_settings(settings_path)
     profile = load_default_profile(settings_path.with_name("profiles.json"), settings)
-    api_key = read_api_key_from_environment(settings.api.api_key_env)
+    api_key = resolve_api_key(settings.credential)
     request = build_request(
         "She go to the library every Tuesday.",
         profile,

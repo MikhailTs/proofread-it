@@ -209,6 +209,16 @@ run and were selected only through the approved live wrapper.
   independent of web-chat history and prior invocation state.
 - Acceptance criterion A12 is complete.
 
+### Post-MVP credential implementation note — 2026-10-11
+
+- The checked statements in this document remain historical evidence for the accepted MVP revision.
+- The later Project owner decision at `spec://proofreader/DESKTOP-ASSISTANT#credential-storage`
+  supersedes only their future-state wording: schema-version-2 settings now default to Windows
+  Credential Manager, Python reads the selected source directly, and explicit or schema-version-1
+  legacy file mode remains available without automatic fallback.
+- Post-MVP manual semantic acceptance is tracked separately in `docs/windows-acceptance.md`; it does
+  not alter the completed MVP result recorded here.
+
 ### D-004 — RESOLVED: TP-09 whitespace-only selection reaches the API
 
 - Status: `RESOLVED`; acceptance impact: `NONE`.

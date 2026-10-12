@@ -9,7 +9,6 @@ from pathlib import Path
 import pytest
 
 _TEST_API_KEY_ENV = "PROOFREAD_IT_TEST_API_KEY"
-_TEST_API_KEY = "clipboard-boundary-sentinel"
 
 
 def _autohotkey_executable(repository_root: Path) -> str:
@@ -38,14 +37,14 @@ def _write_wrapper_settings(path: Path) -> None:
     path.write_text(
         json.dumps(
             {
-                "schema_version": 1,
+                "schema_version": 2,
                 "api": {
                     "model": "gpt-5.6-luna",
-                    "api_key_env": _TEST_API_KEY_ENV,
                     "timeout_seconds": 30,
                     "max_output_tokens": 2048,
                     "retry_count": 2,
                 },
+                "credential": {"source": "file"},
                 "default_profile": "proofread",
                 "context": {
                     "fields": [],
@@ -62,7 +61,7 @@ def _write_wrapper_settings(path: Path) -> None:
 def _write_unicode_fake_uv(path: Path) -> None:
     path.write_text(
         f"""@echo off
-if not \"%{_TEST_API_KEY_ENV}%\"==\"{_TEST_API_KEY}\" exit /b 41
+if not \"%{_TEST_API_KEY_ENV}%\"==\"\" exit /b 41
 if not \"%PYTHONIOENCODING%\"==\"utf-8\" exit /b 42
 \"%PROOFREAD_IT_TEST_PYTHON%\" -c "%PROOFREAD_IT_UNICODE_PROBE%"
 exit /b %ERRORLEVEL%
@@ -221,15 +220,12 @@ def test_full_wrapper_capture_and_clipboard_path_preserves_d1(tmp_path: Path) ->
     included_script = repository_root / "automation" / "windows" / "proofread-it.ahk"
     invoke_script = repository_root / "scripts" / "invoke.ps1"
     settings_path = tmp_path / "settings.json"
-    secret_path = tmp_path / ".secrets" / "openai_token.txt"
     fake_bin = tmp_path / "bin"
     host_script = tmp_path / "full-boundary-host.ahk"
     captured_path = tmp_path / "captured.txt"
     clipboard_path = tmp_path / "clipboard.txt"
     error_path = tmp_path / "error.txt"
-    secret_path.parent.mkdir()
     fake_bin.mkdir()
-    secret_path.write_text(_TEST_API_KEY, encoding="utf-8")
     _write_wrapper_settings(settings_path)
     _write_unicode_fake_uv(fake_bin / "uv.cmd")
     host_script.write_text(

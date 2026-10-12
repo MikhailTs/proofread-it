@@ -18,7 +18,7 @@ from proofread_it.errors import MalformedResponseError, ProviderError
 from proofread_it.invocation_failure import log_preflight_failure
 from proofread_it.presentation.result_window import show_result
 from proofread_it.providers.base import RetryEvent
-from proofread_it.providers.credentials import CredentialError, read_api_key_from_environment
+from proofread_it.providers.credentials import CredentialError, resolve_api_key
 from proofread_it.providers.openai import OpenAIProvider
 from proofread_it.source_check import BLOCKED_EXIT_CODE, blocked_message, check_current_source
 from proofread_it.workflow import run_workflow
@@ -44,6 +44,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     stage = "configuration"
     source_allowed = False
     workflow_started = False
+    api_key: str | None = None
     try:
         settings = load_settings(options.settings)
         profile_name = options.profile if options.profile is not None else settings.default_profile
@@ -67,7 +68,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 source_allowed = False
                 raise ValueError("No selected text was detected.")
             stage = "credential"
-            api_key = read_api_key_from_environment(settings.api.api_key_env)
+            api_key = resolve_api_key(settings.credential)
             retry_events: list[RetryEvent] = []
             stage = "provider"
             provider = OpenAIProvider(
@@ -112,6 +113,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 error=error,
                 include_source_text=source_allowed,
                 settings=settings,
+                sensitive_values=(api_key,) if api_key is not None else (),
             )
         print(str(error), file=sys.stderr)
         return 1

@@ -3,13 +3,15 @@
 import json
 from collections.abc import Mapping
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
 from proofread_it.config.schemas import (
     ApiSettings,
     ConcurrencySettings,
     ContextField,
     ContextSettings,
+    CredentialSettings,
+    CredentialSource,
     ExclusionSettings,
     LoggingSettings,
     Profile,
@@ -24,12 +26,12 @@ class ConfigurationError(ValueError):
 
 
 def load_settings(path: Path) -> Settings:
-    """Load the currently implemented subset of schema version 1 settings."""
+    """Load one supported operational-settings schema."""
     payload = _load_json_object(path, document_name="settings")
 
     schema_version = payload.get("schema_version")
-    if type(schema_version) is not int or schema_version != 1:
-        raise ConfigurationError("settings.schema_version must be 1")
+    if type(schema_version) is not int or schema_version not in (1, 2):
+        raise ConfigurationError("settings.schema_version must be 1 or 2")
 
     default_profile = payload.get("default_profile")
     if not isinstance(default_profile, str) or not default_profile.strip():
@@ -38,25 +40,41 @@ def load_settings(path: Path) -> Settings:
     api_payload = payload.get("api")
     if not isinstance(api_payload, dict):
         raise ConfigurationError("settings.api must be an object")
-    _require_exact_keys(
-        api_payload,
-        {"model", "api_key_env", "timeout_seconds", "max_output_tokens", "retry_count"},
-        "settings.api",
-    )
+    api_key_env: str | None = None
+    if schema_version == 1:
+        _require_exact_keys(
+            api_payload,
+            {"model", "api_key_env", "timeout_seconds", "max_output_tokens", "retry_count"},
+            "settings.api",
+        )
+        if "credential" in payload:
+            raise ConfigurationError(
+                "settings.credential is not supported by settings.schema_version 1"
+            )
+        api_key_env_value = api_payload.get("api_key_env")
+        if (
+            not isinstance(api_key_env_value, str)
+            or not api_key_env_value
+            or api_key_env_value.strip() != api_key_env_value
+            or "=" in api_key_env_value
+            or "\x00" in api_key_env_value
+        ):
+            raise ConfigurationError(
+                "settings.api.api_key_env must be a valid environment variable name"
+            )
+        api_key_env = api_key_env_value
+        credential = CredentialSettings(source="file")
+    else:
+        _require_exact_keys(
+            api_payload,
+            {"model", "timeout_seconds", "max_output_tokens", "retry_count"},
+            "settings.api",
+        )
+        credential = _load_credential_settings(payload.get("credential"))
 
     model = api_payload.get("model")
     if not isinstance(model, str) or not model.strip() or model.strip() != model:
         raise ConfigurationError("settings.api.model must be a non-empty model name")
-
-    api_key_env = api_payload.get("api_key_env")
-    if (
-        not isinstance(api_key_env, str)
-        or not api_key_env
-        or api_key_env.strip() != api_key_env
-        or "=" in api_key_env
-        or "\x00" in api_key_env
-    ):
-        raise ConfigurationError("settings.api.api_key_env must be a valid environment variable name")
 
     timeout_seconds = _load_integer(
         api_payload.get("timeout_seconds"),
@@ -116,7 +134,7 @@ def load_settings(path: Path) -> Settings:
     )
 
     return Settings(
-        schema_version=1,
+        schema_version=cast(Literal[1, 2], schema_version),
         api=ApiSettings(
             model=model,
             api_key_env=api_key_env,
@@ -134,6 +152,36 @@ def load_settings(path: Path) -> Settings:
         ),
         concurrency=ConcurrencySettings(lock_path=lock_path),
         logging=LoggingSettings(path=log_path),
+        credential=credential,
+    )
+
+
+def _load_credential_settings(value: object) -> CredentialSettings:
+    if not isinstance(value, dict):
+        raise ConfigurationError("settings.credential must be an object")
+
+    source = value.get("source")
+    if source == "file":
+        _require_exact_keys(value, {"source"}, "settings.credential")
+        return CredentialSettings(source="file")
+    if source == "windows_credential_manager":
+        _require_exact_keys(value, {"source", "target"}, "settings.credential")
+        target = value.get("target")
+        if (
+            not isinstance(target, str)
+            or not target
+            or target.strip() != target
+            or "\x00" in target
+        ):
+            raise ConfigurationError(
+                "settings.credential.target must be a non-empty credential target"
+            )
+        return CredentialSettings(
+            source=cast(CredentialSource, source),
+            target=target,
+        )
+    raise ConfigurationError(
+        "settings.credential.source must be 'file' or 'windows_credential_manager'"
     )
 
 

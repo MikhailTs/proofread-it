@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Literal
 
 type ContextField = Literal["application_name", "process_name", "window_title"]
+type CredentialSource = Literal["file", "windows_credential_manager"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -12,10 +13,18 @@ class ApiSettings:
     """Validated provider API settings."""
 
     model: str
-    api_key_env: str
     timeout_seconds: int
     max_output_tokens: int
     retry_count: int
+    api_key_env: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CredentialSettings:
+    """Validated source for the provider API credential."""
+
+    source: CredentialSource
+    target: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,12 +61,13 @@ class ConcurrencySettings:
 class Settings:
     """Validated operational settings."""
 
-    schema_version: Literal[1]
+    schema_version: Literal[1, 2]
     api: ApiSettings
     default_profile: str
     context: ContextSettings
     concurrency: ConcurrencySettings
     logging: LoggingSettings
+    credential: CredentialSettings = CredentialSettings(source="file")
 
 
 @dataclass(frozen=True, slots=True)

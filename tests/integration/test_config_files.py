@@ -12,7 +12,10 @@ def test_shipped_default_profile_loads_with_the_accepted_contract() -> None:
     profile = load_default_profile(repository_root / "config" / "profiles.json", settings)
 
     assert settings.api.model == "gpt-5.6-luna"
-    assert settings.api.api_key_env == "OPENAI_API_KEY"
+    assert settings.schema_version == 2
+    assert settings.api.api_key_env is None
+    assert settings.credential.source == "windows_credential_manager"
+    assert settings.credential.target == "ProofreadIt/OpenAIApiKey"
     assert settings.api.timeout_seconds == 30
     assert settings.api.max_output_tokens == 2048
     assert settings.api.retry_count == 2
