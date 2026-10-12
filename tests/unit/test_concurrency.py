@@ -16,10 +16,12 @@ from proofread_it.concurrency import (
 def test_second_lock_is_rejected_without_waiting(tmp_path: Path) -> None:
     lock_path = tmp_path / "nested" / "request.lock"
 
-    with SingleRequestLock(lock_path):
-        with pytest.raises(ConcurrentInvocationError, match=CONCURRENT_MESSAGE):
-            with SingleRequestLock(lock_path):
-                pytest.fail("the second lock must not be acquired")
+    with (
+        SingleRequestLock(lock_path),
+        pytest.raises(ConcurrentInvocationError, match=CONCURRENT_MESSAGE),
+        SingleRequestLock(lock_path),
+    ):
+        pytest.fail("the second lock must not be acquired")
 
     assert lock_path.is_file()
 
@@ -27,9 +29,8 @@ def test_second_lock_is_rejected_without_waiting(tmp_path: Path) -> None:
 def test_lock_is_released_after_failure(tmp_path: Path) -> None:
     lock_path = tmp_path / "request.lock"
 
-    with pytest.raises(RuntimeError, match="sentinel"):
-        with SingleRequestLock(lock_path):
-            raise RuntimeError("sentinel")
+    with pytest.raises(RuntimeError, match="sentinel"), SingleRequestLock(lock_path):
+        raise RuntimeError("sentinel")
 
     with SingleRequestLock(lock_path):
         pass
@@ -64,9 +65,10 @@ with SingleRequestLock(Path(sys.argv[2])):
     try:
         assert holder.stdout is not None
         assert holder.stdout.readline().strip() == "locked"
-        with pytest.raises(ConcurrentInvocationError, match=CONCURRENT_MESSAGE):
-            with SingleRequestLock(lock_path):
-                pytest.fail("the competing process lock must not be acquired")
+        with pytest.raises(
+            ConcurrentInvocationError, match=CONCURRENT_MESSAGE
+        ), SingleRequestLock(lock_path):
+            pytest.fail("the competing process lock must not be acquired")
     finally:
         holder.communicate("\n", timeout=5)
 

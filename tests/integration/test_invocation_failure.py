@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from pytest import MonkeyPatch
+import pytest
 
 from proofread_it.config.loader import ConfigurationError
 from proofread_it.invocation_failure import log_preflight_failure, main
@@ -36,7 +36,7 @@ def _write_settings(path: Path) -> None:
 
 
 def test_empty_selection_logs_source_but_never_stale_text(
-    tmp_path: Path, monkeypatch: MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     settings_path = tmp_path / "settings.json"
     _write_settings(settings_path)
@@ -62,7 +62,7 @@ def test_empty_selection_logs_source_but_never_stale_text(
 
 
 def test_credential_failure_logs_captured_text_but_redacts_a_known_key(
-    tmp_path: Path, monkeypatch: MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     settings_path = tmp_path / "settings.json"
     _write_settings(settings_path)
@@ -112,7 +112,7 @@ def test_invalid_settings_use_recoverable_log_path(tmp_path: Path) -> None:
 
 
 def test_excluded_source_text_is_not_logged_by_credential_failure(
-    tmp_path: Path, monkeypatch: MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     settings_path = tmp_path / "settings.json"
     _write_settings(settings_path)

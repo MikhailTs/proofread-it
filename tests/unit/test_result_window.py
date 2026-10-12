@@ -4,12 +4,12 @@ import tkinter as tk
 from types import SimpleNamespace
 from typing import Any
 
-from pytest import MonkeyPatch
+import pytest
 
 from proofread_it.presentation import result_window
 
 
-def test_show_result_supplies_both_fields_to_renderer(monkeypatch: MonkeyPatch) -> None:
+def test_show_result_supplies_both_fields_to_renderer(monkeypatch: pytest.MonkeyPatch) -> None:
     rendered: list[result_window.ResultView] = []
     monkeypatch.setattr(result_window, "_show_tkinter_window", rendered.append)
 
@@ -81,7 +81,7 @@ def _event(widget: _TextStub) -> Any:
 
 
 def test_result_text_is_focusable_read_only_and_has_copy_shortcuts(
-    monkeypatch: MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     widget = _TextStub()
     monkeypatch.setattr(result_window.scrolledtext, "ScrolledText", lambda *_args, **_kwargs: widget)
@@ -114,7 +114,7 @@ def test_click_focuses_disabled_text_and_control_a_selects_it() -> None:
     assert binding_result == "break"
 
 
-def test_control_c_copies_selected_text(monkeypatch: MonkeyPatch) -> None:
+def test_control_c_copies_selected_text(monkeypatch: pytest.MonkeyPatch) -> None:
     widget = _TextStub()
     copied: list[str] = []
     monkeypatch.setattr(result_window, "_copy_windows_clipboard_text", copied.append)
@@ -125,7 +125,9 @@ def test_control_c_copies_selected_text(monkeypatch: MonkeyPatch) -> None:
     assert binding_result == "break"
 
 
-def test_copy_text_replaces_clipboard_with_complete_result(monkeypatch: MonkeyPatch) -> None:
+def test_copy_text_replaces_clipboard_with_complete_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     widget = _TextStub()
     copied: list[str] = []
     monkeypatch.setattr(result_window, "_copy_windows_clipboard_text", copied.append)
@@ -136,7 +138,7 @@ def test_copy_text_replaces_clipboard_with_complete_result(monkeypatch: MonkeyPa
 
 
 def test_copy_text_normalizes_line_breaks_before_windows_clipboard(
-    monkeypatch: MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     widget = _TextStub()
     copied: list[str] = []

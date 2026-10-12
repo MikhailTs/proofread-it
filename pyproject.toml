@@ -40,7 +40,27 @@ target-version = "py314"
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I"]
+select = [
+    "E4",
+    "E7",
+    "E9",
+    "F",
+    "I",
+    "B",
+    "UP",
+    "SIM",
+    "C4",
+    "PIE",
+    "RUF",
+    "S",
+    "BLE",
+    "DTZ",
+    "LOG",
+    "PT",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "S603", "S607"]
 
 [tool.mypy]
 python_version = "3.14"

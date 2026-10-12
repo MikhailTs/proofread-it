@@ -1,6 +1,7 @@
 """Log an invocation that failed before the proofreading workflow started."""
 
 import argparse
+import contextlib
 import json
 import os
 from collections.abc import Sequence
@@ -50,10 +51,8 @@ def log_preflight_failure(
     """Append one safe failure event when the configured log path can be found."""
     loaded_settings = settings
     if loaded_settings is None:
-        try:
+        with contextlib.suppress(ConfigurationError):
             loaded_settings = load_settings(settings_path)
-        except ConfigurationError:
-            pass
 
     raw_settings = _read_settings_object(settings_path)
     log_path = (

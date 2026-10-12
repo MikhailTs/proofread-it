@@ -4,9 +4,37 @@ Development uses `uv` with the repository-local `.venv`.
 
 ```powershell
 uv sync --dev
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\check.ps1
+```
+
+The verification script fails fast and reports per-stage and total durations. It runs the offline
+test suite, Ruff, mypy, and `git diff --check`. To run an individual check:
+
+```powershell
 uv run pytest
 uv run ruff check .
 uv run mypy src
+```
+
+## Git hooks
+
+Enable the repository-managed hooks once after cloning:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-hooks.ps1
+```
+
+The installer sets the checkout-local `core.hooksPath` to `.githooks` and refuses to replace a
+different existing value unless `-Force` is supplied. The `pre-commit` hook runs the fast offline
+checks: whole-checkout Ruff and mypy followed by `git diff --cached --check` for the staged diff.
+The `pre-push` hook runs the complete `scripts/check.ps1`, including the offline pytest suite.
+Both hooks can be bypassed with Git's `--no-verify` option and therefore complement rather than
+replace continuous integration.
+
+The fast checks can also be run directly:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\check-fast.ps1
 ```
 
 ## Running the desktop application

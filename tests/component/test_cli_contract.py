@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
-from pytest import CaptureFixture, MonkeyPatch
 
 from proofread_it.cli import main
 from proofread_it.concurrency import (
@@ -82,7 +81,7 @@ def _write_config(tmp_path: Path) -> Path:
     return settings_path
 
 
-def _connect_fake_provider(monkeypatch: MonkeyPatch, provider: _FakeProvider) -> None:
+def _connect_fake_provider(monkeypatch: pytest.MonkeyPatch, provider: _FakeProvider) -> None:
     monkeypatch.setattr("proofread_it.cli.resolve_api_key", lambda _settings: _SENTINEL_KEY)
     monkeypatch.setattr(
         "proofread_it.cli.OpenAIProvider",
@@ -92,7 +91,7 @@ def _connect_fake_provider(monkeypatch: MonkeyPatch, provider: _FakeProvider) ->
 
 def test_cli_sends_captured_text_and_shows_the_validated_result(
     tmp_path: Path,
-    monkeypatch: MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     settings_path = _write_config(tmp_path)
     provider = _FakeProvider()
@@ -138,8 +137,8 @@ def test_cli_sends_captured_text_and_shows_the_validated_result(
 
 def test_copy_final_writes_only_validated_text_to_stdout(
     tmp_path: Path,
-    monkeypatch: MonkeyPatch,
-    capfdbinary: CaptureFixture[bytes],
+    monkeypatch: pytest.MonkeyPatch,
+    capfdbinary: pytest.CaptureFixture[bytes],
 ) -> None:
     settings_path = _write_config(tmp_path)
     final_text = "I received the café menu.\r\nIt looks great — thanks!"
@@ -173,7 +172,7 @@ def test_copy_final_writes_only_validated_text_to_stdout(
 )
 def test_cli_uses_configured_default_unless_profile_is_explicit(
     tmp_path: Path,
-    monkeypatch: MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch,
     requested_profile: str | None,
     expected_profile: str,
 ) -> None:
@@ -211,8 +210,8 @@ def test_cli_uses_configured_default_unless_profile_is_explicit(
 
 def test_missing_credential_fails_before_constructing_the_provider(
     tmp_path: Path,
-    monkeypatch: MonkeyPatch,
-    capsys: CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     settings_path = _write_config(tmp_path)
     monkeypatch.setenv("PROOFREAD_IT_SOURCE_TEXT", "She go to the library.")
@@ -256,8 +255,8 @@ def test_missing_credential_fails_before_constructing_the_provider(
 @pytest.mark.parametrize("source_text", [None, " ", "\t", "\r\n", " \t\r\n"])
 def test_empty_or_whitespace_selection_is_logged_without_reading_the_credential(
     tmp_path: Path,
-    monkeypatch: MonkeyPatch,
-    capsys: CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
     source_text: str | None,
 ) -> None:
     settings_path = _write_config(tmp_path)
@@ -284,7 +283,7 @@ def test_empty_or_whitespace_selection_is_logged_without_reading_the_credential(
 
 def test_invalid_profile_is_logged_before_credential_access(
     tmp_path: Path,
-    monkeypatch: MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     settings_path = _write_config(tmp_path)
     monkeypatch.setenv("PROOFREAD_IT_SOURCE_TEXT", "Draft text")
@@ -307,8 +306,8 @@ def test_invalid_profile_is_logged_before_credential_access(
 
 def test_excluded_source_fails_before_reading_credentials_or_constructing_provider(
     tmp_path: Path,
-    monkeypatch: MonkeyPatch,
-    capsys: CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     settings_path = _write_config(tmp_path)
     payload = json.loads(settings_path.read_text(encoding="utf-8"))
@@ -350,8 +349,8 @@ def test_excluded_source_fails_before_reading_credentials_or_constructing_provid
 
 def test_parallel_invocation_is_rejected_before_credentials_or_provider(
     tmp_path: Path,
-    monkeypatch: MonkeyPatch,
-    capsys: CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     settings_path = _write_config(tmp_path)
     monkeypatch.setattr(

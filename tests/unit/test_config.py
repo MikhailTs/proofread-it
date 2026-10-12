@@ -113,7 +113,7 @@ def test_invalid_api_key_environment_variable_name_is_rejected(
     api["api_key_env"] = api_key_env
     settings_path.write_text(json.dumps(payload), encoding="utf-8")
 
-    with pytest.raises(ConfigurationError, match="settings.api.api_key_env"):
+    with pytest.raises(ConfigurationError, match=r"settings\.api\.api_key_env"):
         load_settings(settings_path)
 
 

@@ -94,7 +94,7 @@ def test_windows_source_reads_unicode_generic_credential() -> None:
 def test_empty_or_malformed_windows_value_is_rejected(blob: bytes) -> None:
     store = WindowsCredentialStore(FakeNativeCredentialApi(blob))
 
-    with pytest.raises(CredentialError, match="empty|malformed"):
+    with pytest.raises(CredentialError, match=r"empty|malformed"):
         store.read("ProofreadIt/Test")
 
 

@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 import pytest
-from pytest import CaptureFixture, MonkeyPatch
 
 from proofread_it.source_check import BLOCKED_EXIT_CODE, main
 
@@ -43,8 +42,8 @@ def _write_settings(path: Path) -> None:
 )
 def test_blocked_source_is_logged_without_text_request_response_or_credential(
     tmp_path: Path,
-    monkeypatch: MonkeyPatch,
-    capsys: CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
     requested_profile: str | None,
     expected_profile: str,
 ) -> None:
@@ -90,7 +89,7 @@ def test_blocked_source_is_logged_without_text_request_response_or_credential(
 
 def test_allowed_source_returns_success_without_creating_a_log(
     tmp_path: Path,
-    monkeypatch: MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     settings_path = tmp_path / "settings.json"
     _write_settings(settings_path)
@@ -114,7 +113,7 @@ def test_allowed_source_returns_success_without_creating_a_log(
 
 def test_invalid_settings_are_logged_when_the_log_path_is_recoverable(
     tmp_path: Path,
-    monkeypatch: MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     settings_path = tmp_path / "settings.json"
     _write_settings(settings_path)

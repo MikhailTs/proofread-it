@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from pytest import CaptureFixture
+import pytest
 
 from proofread_it.credential_cli import main
 
@@ -55,7 +55,7 @@ def _write_settings(path: Path, source: str = "windows_credential_manager") -> N
 
 def test_set_prompts_for_and_writes_the_key_without_printing_it(
     tmp_path: Path,
-    capsys: CaptureFixture[str],
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     settings_path = tmp_path / "settings.json"
     _write_settings(settings_path)
@@ -76,7 +76,7 @@ def test_set_prompts_for_and_writes_the_key_without_printing_it(
 
 def test_remove_deletes_only_the_configured_target(
     tmp_path: Path,
-    capsys: CaptureFixture[str],
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     settings_path = tmp_path / "settings.json"
     _write_settings(settings_path)
@@ -91,7 +91,7 @@ def test_remove_deletes_only_the_configured_target(
 
 def test_file_source_cannot_be_managed_as_a_windows_credential(
     tmp_path: Path,
-    capsys: CaptureFixture[str],
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     settings_path = tmp_path / "settings.json"
     _write_settings(settings_path, source="file")
