@@ -49,9 +49,7 @@ Decision needed: <specific question>
 
 ## Semantic changelog {#changelog}
 
-- YYYY-MM-DD — `<authority>` — `{#affected-anchor}`:
-  `<old meaning> -> <new meaning>`; reason: `<why>`;
-  invalidates: `<artifacts/checks>`; review: `<id | NONE>`.
+- YYYY-MM-DD — `<authority>` — `{#affected-anchor}`: `<old meaning> -> <new meaning>`; reason: `<why>`; invalidates: `<artifacts/checks>`; review: `<id | NONE>`.
 
 <!-- Follow specs/SPEC-PROTOCOL.md. Remove unused placeholder items.
 Do not mark APPROVED without a recorded decision by the declared authority. -->
